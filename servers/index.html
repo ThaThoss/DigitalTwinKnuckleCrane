@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Client</title>
+</head>
+<body>
+    <h1>WebSocket Client</h1>
+    <button id="sendMessageBtn">Send Message to Server</button>
+
+    <script>
+        const socket = new WebSocket('ws://localhost:8081');
+
+        // Connection opened
+        socket.addEventListener('open', (event) => {
+            console.log('WebSocket connection opened:', event);
+        });
+
+        // Listen for messages
+       // Listen for messages
+
+       socket.addEventListener('message', (event) => {
+            console.log('Message from server:', event.data);
+
+            // Assuming the server sends a JSON string
+            const data = JSON.parse(event.data);
+            console.log('Received array:', data);
+
+            // Display the received array on the screen
+            const resultDiv = document.createElement('div');
+            resultDiv.textContent = 'Received Array: ' + data.join(', ');
+            document.body.appendChild(resultDiv);
+        });
+
+        // Connection closed
+        socket.addEventListener('close', (event) => {
+            console.log('WebSocket connection closed:', event);
+        });
+
+        // Connection error
+        socket.addEventListener('error', (event) => {
+            console.error('WebSocket connection error:', event);
+        });
+
+        // Send array when the button is clicked
+        document.getElementById('sendMessageBtn').addEventListener('click', () => {
+            const arrayToSend = [1.23, 4.56, 7.89];
+            const message = JSON.stringify(arrayToSend);
+            console.log('Sending array to server:', arrayToSend);
+            socket.send(message);
+        });
+    </script>
+</body>
+</html>

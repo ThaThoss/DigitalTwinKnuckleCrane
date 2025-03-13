@@ -1,0 +1,79 @@
+// Masses
+
+m1 : mass of boat
+m2 : mass of crane tower
+m3 : mass of crane main boom
+m4 : mass of crane outer boom
+m5 : mass of load
+
+// Lenghts
+
+h21 : lenght 3-axis, vessel to joint of tower
+h22 : lenght 3-axis, joint21 to mass of tower
+b2 : lenght 1-axis, vessel to joint of tower
+L2 : lenght 2-axis, vessel to joint of tower
+h3 : lenght 3-axis, C of tower to joint23
+L3 : lenght 2-axis, joint32 to C of main boom
+L4 : lenght 2-axis, C of main boom to joint43
+L5 : lenght 2-axis, joint43 to C of outer boom
+
+// Rotations
+
+R 	: Rotation matrix for the vessel, R1
+Rp 	: Previous R 
+Rdot: R dotted
+R21 : 
+R2  :	
+R32 :
+R3 	:
+R43 :
+R4 	:
+
+TR21: Transposed R21
+
+// Angles
+
+Y1
+Y2
+Y3
+--> angles for rotation of vessel
+
+Y4 : angle for tower
+Y5 : angle for main boom 
+Y6 : angle for outer boom
+
+q1
+q2
+q3
+--> angles for rotation of vessel
+
+q4 : angle for tower
+q5 : angle for main boom 
+q6 : angle for outer boom
+
+th2 : angle for tower
+th3 : angle for main boom 
+th4 : angle for outer boom
+
+// moments
+
+mom1 : moment turning the tower
+mom2 : moment turning the main boom
+mom3 : moment turning the outer boom
+
+// objects
+
+o1 : vessel
+o2 : tower
+o3 : main boom
+o4 : outer boom 
+o5 : load
+
+// angular velocities
+
+Sw2 : Abs. Angular velocity of the tower skewed
+
+w21 : rel. angular velocity 2 from 1
+w32 : rel. angular velocity 3 from 2
+w43 : rel. angular velocity 4 from 3
+

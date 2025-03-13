@@ -1,0 +1,60 @@
+clc
+clear all
+
+
+
+filename = "TowerMesh.dat";
+fileID = fopen(filename,'r');
+tline = fgetl(fileID);
+tline = fgetl(fileID);
+tline = fgetl(fileID);
+tline = fgetl(fileID);
+tline = fgetl(fileID);
+nElements = 2460;
+nNodes = 2566;
+nNodeElement=4;
+AllElements=fscanf(fileID,"%d %d %d %d %d %d\n",[6,nElements])';
+Elements= [AllElements(:,1:5),zeros(nElements,1)];
+tline = fgetl(fileID);
+Nodes=fscanf(fileID,"%d %f %f\n",[3,nNodes])';
+Nodes = Nodes(:,2:3);
+
+
+[displacements,vonMieses] = getDiplacementsTower();
+displNodes = Nodes+displacements*50;
+
+
+
+
+
+NodesForEndPos = [502,504];
+
+posForBoom = [displNodes(NodesForEndPos(1)+1,1),displNodes(NodesForEndPos(2)+1,2)]
+
+
+%% Plot mesh
+f1 = figure(1);
+clf(f1,'reset');
+hold on
+for i=1:nElements
+    for j=1:nNodeElement-1
+
+        node = Elements(i,j+1:j+2)+1;     
+        xCoords=Nodes(node,2);
+        yCoords=Nodes(node,3);
+       
+        plot(xCoords,yCoords,'-b')
+
+
+
+    end
+    node = Elements(i,[5,2])+1;
+    xCoords=Nodes(node,2);
+    yCoords=Nodes(node,3);
+  
+    plot(xCoords,yCoords,'-b')
+   
+
+end
+axis equal
+hold off
