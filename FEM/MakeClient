@@ -1,0 +1,13 @@
+cxx = g++
+CXXFLAGS = -Wall -Wextra
+INCLUDEPATH = -I./lib -I./../lib/
+DEPS =  
+LIBS = -lm -lpthread  
+OBJ = ./femqdClientContinousTest.o  
+TARGET =  client.out
+
+${TARGET}: ${OBJ} ${DEPS}
+	${cxx} ${CXXFLAGS} -o $@ ${OBJ} ${LIBS}
+	
+clean:
+	rm -f ${OBJ} *~

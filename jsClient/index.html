@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="./Libraries/MyLibrary/myCSS.css">
+    <link rel="stylesheet" href="./Libraries/jqMobile/jquery.mobile-1.4.3.min.css">
+    <link rel="stylesheet" href="style.css">
+
+
+</head>
+
+<body>
+
+
+
+	<a href="#myPopupDialog" data-rel="popup" data-position-to="origin" id="myInformationButtonBox" class="ui-btn  ui-shadow">
+
+	<span id="myInformationText">Modeling a knuckleboom crane control to reduce pendulum motion using the moving frame method
+	
+	</span>
+
+	</a>
+	
+	<div data-role="popup" id="myPopupDialog">
+  		
+		
+		
+	
+			<div id="myPopupBox">
+
+		 	<p>
+
+</font>
+<h3>Abstract</h3>
+			A Knuckle Boom Crane is a pedestal-mounted, slew-bearing crane with a joint in the middle of the distal arm; i.e. boom. This distal boom articulates at the 'knuckle (i.e.: joint)' and that allows it to fold back like a finger. This is an ideal configuration for a crane on a ship where storage space is a premium. This project researches the motion of a ship mounted knuckle boom crane to minimize the pendulum motion of a hanging load. To do this, the project leverages the Moving Frame Method (MFM).   The MFM draws upon Lie group theory�SO(3) and SE(3)�and Cartan�s Moving Frames. This, together with a compact notation from geometrical physics, makes it possible to extract the equations of motion, expeditiously. The work reported here accounts for the masses and geometry of all components, interactive motor couples and prepares for buoyancy forces and added mass on the ship. This research solves the equations numerically using a relatively simple numerical integration scheme. Then, the Cayley-Hamilton theorem and Rodriguez�s formula reconstructs the rotation matrix for the ship. This work displays the motion on 3D web pages, viewable on mobile devices.
+
+<br>
+<br>
+
+			</p>
+
+
+			<p>	<a href="mailto:marene.eia@gmail.com">Maren Eriksen Eia</a> <br>
+						<a href="mailto:emvigre@gmail.com">Elise Mari Vigre</a><br>
+						
+			</p>
+
+		
+
+
+
+		</div>
+				
+		
+	</div>
+
+
+
+	<div id="myMainControlsBox">
+	
+		<span >
+ 				
+			<span id="mySliderTitle">Position of Tower:</span> <br>
+				<input type="text" data-type="range" id="mySliderT" value="0" min="-0.5" max="1.5" step = ".01"></input>
+
+
+			<span id="mySliderTitle">Position of Main Boom:</span> <br>
+				<input type="text" data-type="range" id="mySliderMB" value="0" min="0" max="1.5" step = ".01"></input>
+			
+			<span id="mySliderTitle">Position of Outer Boom:</span> <br>
+				<input type="text" data-type="range" id="mySliderOB" value="0" min="0" max="2.5" step = ".01"></input>
+
+
+
+
+
+		</span>
+
+
+		<span class="myButtonTextSpan"> Time</span> 
+		<p id="demo">X</p>
+
+	
+		<div id="myMainButtonBox" > 
+			<span style="display: inline-block"><button id="myStartButton"><span class="myButtonTextSpan"> Start </span></button>  	</span>	
+			<span style="display: inline-block"><button id="myResetButton"><span class="myButtonTextSpan"> Reset </span></button>   </span>	
+			<span style="display: inline-block"><button id="myReconButton"><span class="myButtonTextSpan"> Reconnect </span></button>   </span>	
+		</div>
+
+
+
+
+	
+	</div>
+
+		
+
+
+
+
+	<div id="myCanvas">  </div>
+
+	<script src="./Libraries/jquery/jquery-2.1.1.min.js"></script>
+	<script src="./Libraries/jqMobile/jquery.mobile-1.4.3.min.js"></script>
+	<script src="./Libraries/MyLibrary/FormatLibrary.js"></script>
+	<script src="./Libraries/build/three.min.js"></script>
+	<script src="./Libraries/fonts/helvetiker_regular.typeface.js"></script>
+	<script src="./Libraries/js/loaders/MTLLoader.js"></script>
+	<script src="./Libraries/js/loaders/OBJMTLLoader.js"></script>
+	<script src="./Libraries/js/controls/OrbitControls.js"></script>
+	<script src="./Libraries/MyLibrary/MathLibrary.js"></script>
+	<script src="./Libraries/MyLibrary/GraphicsLibrary.js"></script>
+		
+	<script type="text/javascript" src="main.js"></script> 
+	<script type="text/javascript" src="physics.js"></script> 
+	<script type="text/javascript" src="math.js"></script> 
+	<script type="text/javascript" src="prepareBD.js"></script> 
+	<script type="text/javascript" src="getForce.js"></script> 
+	<script type="text/javascript" src="MyNumerics.js"></script> 
+
+</body>
+
+</html>

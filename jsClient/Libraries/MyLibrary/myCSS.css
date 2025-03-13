@@ -1,0 +1,222 @@
+ul.c {
+    	list-style-type: circle;
+}
+ul.s {
+    	list-style-type: square;
+}
+.red {
+	color: #F00;
+}
+.green {
+	color: #0C0;
+}
+.blue {
+	color: #009;
+}
+#pColor {
+    color: #BABA21;
+    font-weight: bold;
+}
+#vColor {
+    color: #D698FE;
+    font-weight: bold;
+}
+#aColor {
+    color: #9A03FE;
+    font-weight: bold;
+}
+#HColor {
+    color: #4A9586;
+    font-weight: bold;
+}
+#MColor {
+    color: #FF800D;
+    font-weight: bold;
+}
+#WColor {
+    color: #551a8b;
+    font-weight: bold;
+}
+#myInformationButtonBox {
+	width: 400px;
+	padding: 5px;
+	border-width: 4px;
+	border-style: solid;
+	border-color: #aaaa00;
+	margin: 10px;
+}
+
+
+#myStartResetBox {
+	text-align: center;
+	width: 400px;
+	padding: 5px;
+	border-width: 4px;
+	border-style: solid;
+	border-color: #009900;
+	margin: 10px;
+}
+#myMainControlsBox {
+	width: 400px;
+	padding: 5px;
+	border-width: 4px;
+	border-style: solid;
+	border-color: #008800;
+	margin: 10px;
+}
+
+#myPopupBox{
+	width: 400px;
+	padding: 5px;
+	border-width: 2px;
+	border-style: solid;
+	border-color: #aaaa00;
+	margin: 10px;
+	font-size: 12px;
+}
+
+#myInformationText {
+	font-family: "Times New Roman", Times, serif;
+	color: #000000;
+	font-size: 14px;
+}
+#myPopupHeaderText {
+	font-family: "Times New Roman", Times, serif;
+	color: #000000;
+	text-align: center;
+	font-size: 14px;
+}
+
+#myPopupFooterText {}
+
+#StartResetText {
+	font-family: "Times New Roman", Times, serif;
+	color: #000000;
+	font-size: 14px;
+}
+
+.myAnyButton {
+	width: 70px;
+	height: 30px;
+	padding: 2px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: #00aa00;
+	margin: 5px;
+}
+
+#myStartButton {
+	width: 50px;
+	padding: 2px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #00aa00;
+	margin: 5px;
+}
+
+
+#myPauseButton{
+	width: 50px;
+	padding: 2px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #0000aa;
+	margin: 5px;
+}
+
+#myResetButton{
+	width: 50px;
+	padding: 2px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #aa0000;
+	margin: 5px;
+}
+#myContinueButton{
+	width: 50px;
+	padding: 2px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #aaaa00;
+	margin: 5px;
+}
+
+#myFlipSwitch{
+	width: 100px;
+	padding: 2px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #aa0000;
+	margin: 5px;
+}
+#mySlider {
+	color: #ff0000;
+}
+
+#myMainButtonBox {
+	text-align: center;
+}
+#myMainSliderBox {
+	height: 400px; 
+	width: 400px;
+	text-align: left;
+}
+
+span.myButtonTextSpan {
+	font-family: "Times New Roman", Times, serif;
+	color: #000000;
+	font-size: 12px;
+
+}
+
+#mySliderTitle {
+	font-family: "Times New Roman", Times, serif;
+	color: #006633;
+	font-size: 14px;
+	font-weight: bold;
+}
+#myButtonTitle {
+	font-family: "Times New Roman", Times, serif;
+	color: #FF0000;
+	font-size: 14px;
+}
+#mySliderInformation {
+	font-size: 12px;
+	color: #090;
+}
+.myFooterStyle1 {
+	font-family: "Times New Roman", Times, serif;
+	font-size: 12px;
+   	text-align: center;
+	color: blue;
+}
+.myFooterStyle2 {
+	font-family: "Times New Roman", Times, serif;
+	font-size: 12px;
+   	text-align: center;
+	color: green
+}
+.myFooterStyle3 {
+	font-family: "Times New Roman", Times, serif;
+	font-size: 14px;
+   	text-align: center;
+	color: red;
+}
+
+#v1 {
+}
+#myPopupDialog #myPopupBox ol li strong {
+	font-family: "Times New Roman", Times, serif;
+}
+#myPopupDialog #myPopupBox ol li strong {
+	font-family: "Times New Roman", Times, serif;
+}
+#myPopupDialog #myPopupBox ol li strong {
+	font-family: "Times New Roman", Times, serif;
+}
+.italic {
+	font-style: italic;
+}
+#myPopupDialog #myPopupBox p #red2 {
+	color: #F00;
+}
