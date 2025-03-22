@@ -77,6 +77,7 @@ for(int i=0;i<nFEMBodies;i++){
 	//std::cout << "Header " << i << " in getFEMHeaders" <<std::endl;
     //std::cout << headers[i][0] << " , " << headers[i][1] << " , " << headers[i][2] << " , " << headers[i][3] << " , " << headers[i][4] << std::endl; 
 }
+
 sem_post(&(shmStruct->semLock));
 
 

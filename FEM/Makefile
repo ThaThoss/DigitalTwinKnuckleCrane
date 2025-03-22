@@ -18,7 +18,9 @@ qd: femqd.o \
 		qdshape.o\
 		solve.o\
 		qdArea.o\
-		qdCalcForce.o
+		qdCalcForce.o\
+		qdSaveInverse.o\
+		qdInverseReader.o
 	$(CC) -o qd femqd.o \
 		qdmemory.o \
 		qdreader.o \
@@ -35,7 +37,9 @@ qd: femqd.o \
               	qdshape.o\
 		solve.o\
 		qdArea.o\
-		qdCalcForce.o $(LIBS) 
+		qdCalcForce.o\
+		qdSaveInverse.o\
+		qdInverseReader.o $(LIBS) 
 qdmemory.o: qdmemory.c
 	$(CC) -c qdmemory.c
 
@@ -83,6 +87,12 @@ qdArea.o:  qdArea.c
 
 qdCalcForce.o:  qdCalcForce.c
 	$(CC) -c qdCalcForce.c
+
+qdSaveInverse.o: qdSaveInverse.c
+	$(CC) -c qdSaveInverse.c
+	
+qdInverseReader.o: qdInverseReader.c
+	$(CC) -c qdInverseReader.c
 
 femqd.o: femqd.c
 	$(CC) -c femqd.c

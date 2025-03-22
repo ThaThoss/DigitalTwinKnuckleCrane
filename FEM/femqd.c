@@ -8,7 +8,8 @@
 #include "qdfunctions.h"
 int qdCalcForce(double * force, double *tempForce,double *nodalMass, BOUND bc,FORCESTRUCT *forceStruct, int *id);
 
-
+int qdSaveInverse(double* inverse, int neqn, char fileName[]);
+int qdInverseReader(double* inv, int neqn, char fileName[]);
 
 
 int main(int argc, char** argv)
@@ -55,7 +56,16 @@ int main(int argc, char** argv)
 	gravity_flag = forceStruct.gravity_flag;
 	printf("nmat = %d, numel = %d, numnp = %d, planeFlag = %d, gravityFlg = %d",nmat,numel,numnp,plane_stress_flag,gravity_flag);
 	//add gravity value to initial value reciever
+	// {{2460, 2566,   1,   1,   1},{2220, 2397,   1,   1,   1},{1328, 1468,   1,   1,   1}};
 
+	char stiffnessFileMname[24] = {0};
+	if(numel==2460){
+		strcpy(stiffnessFileMname, "towerInverse.dat");
+	}else if(numel==2220){
+		strcpy(stiffnessFileMname, "boomInverse.dat");
+	}else if(numel==1328){
+		strcpy(stiffnessFileMname, "outerInverse.dat");
+	}
 
 /* Create local shape functions at gauss points */
     g = 2.0/sq3;
@@ -224,9 +234,13 @@ printf("]\n\n");
 			printf("force[%d]=%lf\n",i,*(force+i));
 		}	
 */
+	printf("reading Inverse from file...");
+	qdInverseReader(inv, neqn, stiffnessFileMname);
 	printf("Initial Solver started\n");
-	solve( solutionVec, inv, A, force, neqn);
+	//solve( solutionVec, inv, A, force, neqn);
+	matvecmult(solutionVec,inv,force,neqn,neqn);
 	free(A);
+	//qdSaveInverse(inv,neqn,  stiffnessFileMname);
 
 // Start of FEM Loop //
 // -------------------------------------------------------------//
@@ -280,11 +294,11 @@ printf("Starting qdKassmembleStress\n");
 		//calculate force
 		qdCalcForce(force, tempForce, nodalMass, bc, &forceStruct, id);
 		// Print solution	
-		/**/
+		/*
 		for( i = 0; i<dof; i++){
 			printf("force[%d]=%lf\n",i,*(force+i));
 		}	
-
+*/
 		
 		//solve again
 		matvecmult(solutionVec,inv,force,neqn,neqn);
@@ -313,7 +327,7 @@ printf("Starting qdKassmembleStress\n");
 
 	}
 	close(sockfd);
-printf("free(strain);\n");
+	printf("free(strain);\n");
 	free(strain);
 	
 
@@ -333,7 +347,7 @@ free(stress);
 printf("free(mem_double);\n");
 free(mem_double);
 	
-printf("FEM server shutting down\n");
+printf("FEM server shutting down, gogo was: %d\n", gogo);
 	
 
 }

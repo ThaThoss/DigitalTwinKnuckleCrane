@@ -69,6 +69,11 @@ int main(int argc, char *argv[]){
     getFEMHeaders( headers, shmStru,  nFEMBodies);
 
     cout << "nFEMBodies = "<< nFEMBodies << endl;
+    for(int i=0;i<nFEMBodies;i++){
+        for(int j=0;j<5;j++){
+            cout << headers[i][j] << " , ";
+        }cout << endl;
+    }
 
     cout << "Internal Server Shared memory attatched, gogo was: " << shmStru->gogo << endl;
 
@@ -190,7 +195,7 @@ int main(int argc, char *argv[]){
     
     while(gogo){
 
-cout << "In com loop Internal, waiting for loops to finish" << endl;
+        cout << "In com loop Internal, waiting for loops to finish" << endl;
         for (int i = 0; i < nFEMBodies; i++) {
             sem_wait(&semSyncWait);
         }

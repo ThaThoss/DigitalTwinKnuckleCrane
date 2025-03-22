@@ -179,9 +179,7 @@ void femComLoop(int femBodyNumber, int bytesForPointer,int shmid, char femIp[16]
 	while(gogo[0]){
 		printf("-----------Waiting to recieve-------------\n");
 		ReceiveNChars( sockfd, (char*)dataToReceive, numBytesToRecieve);
-		if(count>500){
-			gogo[0]=0;
-		}
+
 		count++;
         // Signal completion to controll thread
         sem_post(semSyncWait);
