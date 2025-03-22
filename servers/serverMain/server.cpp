@@ -34,6 +34,7 @@ int main(int argc, char *argv[]){
     write(clientSoc,"200",sizeof("200"));
     
     //read num bodies, [RBD, FEM]
+    sleep(1);
     ReceiveNInts(clientSoc,nBodies,sizeof(nBodies));
 
 
@@ -47,7 +48,7 @@ int main(int argc, char *argv[]){
     int headers[nFEMBodies][5] = {{2460, 2566,   1,   1,   1},{2220, 2397,   1,   1,   1},{1328, 1468,   1,   1,   1}};
     int deformationScale[3] = {200,25,50};
     int bodyScale[3] = {1,2,4};
-    double femZeroPoint[3][2] = {{0,0},{0.2,0.5},{.07,1.1}};//Where the previous body is attached, used in serverexternal for positioning the fem bodies
+    double femZeroPoint[3][2] = {{0,0},{0.2,0.5},{0.07,1.1}};//Where the previous body is attached, used in serverexternal for positioning the fem bodies
     double femSylinderPrePos[3][2] = {{0,0},{1.7,0.006},{0.25,0.97}};//Where the fixed area of the previous body's cylinder comes in
     double femSylindertPos[3][2] = {{4.0,2.75},{2.887,0.0041},{0,0}};//Where the force of the next body's cylinder comes in
     double femCmPoint[3][2] = {{2.5,3.0},{2.3,0.325},{1.225,0.553}}; //Coordinate of the centre of mass.
@@ -100,8 +101,8 @@ int main(int argc, char *argv[]){
         shmStru->numFEMBodies = nFEMBodies;
         shmStru->numRBDbodies = 4;
         int numBytesToJump = 0;
-        for(int i=0; i<nFEMBodies;i++){
 
+        for(int i=0; i<nFEMBodies;i++){
             memcpy(shmStru->sharedFEMData + numBytesToJump,headers[i],5*sizeof(int));  
             memcpy(shmStru->femZeroPoint[i],femZeroPoint[i], sizeofDouble*2); 
             memcpy(shmStru->femCmPoint[i],  femCmPoint[i],   sizeofDouble*2);  

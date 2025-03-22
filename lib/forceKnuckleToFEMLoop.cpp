@@ -66,7 +66,7 @@ int getReactionForceAndSave(sharedMemoryStructForIntegration *shrdMemStruct, VAL
 
     int check = 0;
     double rightHandSide[4] = {0};
-    double mgx, mgy, pivot;
+    double mgx, mgy;
     
     //{f1x,f2y,f2x,f1y}
     double leftHandSide[4] = {0};

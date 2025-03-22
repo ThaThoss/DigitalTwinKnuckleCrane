@@ -68,7 +68,7 @@ int main(int argc, char* argv[]){
 		printf("\nServer error with code %s\n",buffer);
 		return -1;
 	}
-    usleep(1000000);  // 2,000,000 microseconds (2 sec)
+    //sleep(2);  // 2,000,000 microseconds (2 sec)
     printf("Sending Bodies");
     int bodies[2] = {4,3};
     if(SendNInts(sockfd,bodies,sizeof(bodies))){
@@ -163,6 +163,9 @@ int main(int argc, char* argv[]){
     //Send final controller values
     *gogoSignal = 0;
     check = SendNUnsignedChar(sockfd,dataToSend,numCharsToSend);
+    printf("Shutdown sent\n");
+    printf("Radius was %f, theta %f and phi %f\n",rates[0],rates[1],rates[2]);
+    printf("gogo was %d, moveCrane %d \n\n",*gogoSignal,*moveCraneSignal);
     close(js);
     close(sockfd);
     return 0;
