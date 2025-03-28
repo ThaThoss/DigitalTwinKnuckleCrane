@@ -37,3 +37,5 @@ test/
 
 *.pdf
 *.pptx
+
+FEM/outerInverse.dat
