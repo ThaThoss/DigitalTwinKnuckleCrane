@@ -6,7 +6,6 @@
 *.lo
 *.o
 *.obj
-*.dat
 
 # Precompiled Headers
 *.gch
@@ -39,3 +38,5 @@ test/
 *.pptx
 
 FEM/outerInverse.dat
+FEM/boomInverse.dat
+FEM/towerInverse.dat
