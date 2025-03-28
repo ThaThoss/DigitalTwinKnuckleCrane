@@ -46,14 +46,15 @@ int main(int argc, char *argv[]){
     //numel numnp nmat plane_stress_flag, gravity_flag
     //196 	250   1   1   1 // dog file;
     int headers[nFEMBodies][5] = {{2460, 2566,   1,   1,   1},{2220, 2397,   1,   1,   1},{1328, 1468,   1,   1,   1}};
-    int deformationScale[3] = {200,25,50};
-    int bodyScale[3] = {1,2,4};
-    double femZeroPoint[3][2] = {{0,0},{0.2,0.5},{0.07,1.1}};//Where the previous body is attached, used in serverexternal for positioning the fem bodies
+    int deformationScale[3] = {200,3,30};
+    int bodyScale[3] = {1,2,2};
+    double femZeroPoint[3][2] = {{0,0},{0.2,0.5},{2.07,1.1}};//Where the previous body is attached, used in serverexternal for positioning the fem bodies
     double femSylinderPrePos[3][2] = {{0,0},{1.7,0.006},{0.25,0.97}};//Where the fixed area of the previous body's cylinder comes in
     double femSylindertPos[3][2] = {{4.0,2.75},{2.887,0.0041},{0,0}};//Where the force of the next body's cylinder comes in
     double femCmPoint[3][2] = {{2.5,3.0},{2.3,0.325},{1.225,0.553}}; //Coordinate of the centre of mass.
     double femJointPos[3][2] = {{2.4,5.6},{4.4,0.5},{0.25,0.0456}};//Where the next body is attached,  used in serverexternal for positioning the fem bodies
-    double angles[3] = {0,1.5,4.5};
+    double angles[3] = {0,0,0};
+    int axisOfRotation[4] = {0,3,2,2};
 
     int numBytesForSharedMemory = 0;
     numBytesForSharedMemory += sizeof(sharedMemoryStructForIntegration);//Size of known sizes in struct
@@ -93,6 +94,8 @@ int main(int argc, char *argv[]){
         shmStru->mass[1] = 150;
         shmStru->mass[2] = 150;
         shmStru->gogo = 1;
+        shmStru->loadOnOuter = 10000.0;
+        shmStru->numBytesForAngles = 96;
         memcpy(shmStru->angles,zerosForShm,SZ_DOUBLE*3);
         memcpy(shmStru->globalPosPoint,zerosForShm,SZ_DOUBLE*3);
         memcpy(shmStru->dataForKnuckle,zerosForShm,SZ_DOUBLE*3);
@@ -101,6 +104,7 @@ int main(int argc, char *argv[]){
         shmStru->numFEMBodies = nFEMBodies;
         shmStru->numRBDbodies = 4;
         int numBytesToJump = 0;
+        int femNumPointLoads[3] = {2,2,1};
 
         for(int i=0; i<nFEMBodies;i++){
             memcpy(shmStru->sharedFEMData + numBytesToJump,headers[i],5*sizeof(int));  
@@ -113,8 +117,14 @@ int main(int argc, char *argv[]){
             shmStru->deformationScale[i] = deformationScale[i];
             shmStru->angles[i] = angles[i];
             shmStru->femBodyScale[i] = bodyScale[i];
+            shmStru->femNumPointLoads[i] = femNumPointLoads[i];
+           
     
         }
+        for(int i=0;i<4;i++){
+            shmStru->axisOfRotation[i] = axisOfRotation[i];
+        }
+
         shmStru->numBytesBefFEM = numBytesToJump;
        
         

@@ -220,9 +220,9 @@ int saveDeformationToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruc
 
 int saveVonMiesesToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, double* vonMieses){
 
-sem_wait(&(shrdMemStruct->semLock));
-	memcpy(sharedPointers->vonMieses,vonMieses,femData->numNodPnt*sizeofDouble);
-sem_post(&(shrdMemStruct->semLock));
+	sem_wait(&(shrdMemStruct->semLock));
+		memcpy(sharedPointers->vonMieses,vonMieses,femData->numNodPnt*sizeofDouble);
+	sem_post(&(shrdMemStruct->semLock));
 
 	return 0;
 }
@@ -239,23 +239,27 @@ int getForceFromShardeMem(double *Force, double* gravityDirection, sharedMemoryS
 		gravityDirection[0] = *(shrdMemStruct->gravityDir + 3*bodyNum);//ignore direction into the page(2 dir)
 		gravityDirection[1] = *(shrdMemStruct->gravityDir + 3*bodyNum + 2);
 	sem_post(&(shrdMemStruct->semLock));
+	//printf("Gravity dir from body %d, is [ %lf, %lf ]\n", bodyNum,gravityDirection[0],gravityDirection[1] );
 return 0;
 }
 
 
 int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, double * angles, double* gravityDir){
 
+
+
+
 	sem_wait(&(shrdMemStruct->semLock));
 		int numRBDBodies = shrdMemStruct->numRBDbodies;
-		int numFEMBodies = shrdMemStruct->numFEMBodies;
 		int axisDir[numRBDBodies] = {0};
 		memcpy(axisDir,shrdMemStruct->axisOfRotation,sizeof(int)*numRBDBodies);
 	sem_post(&(shrdMemStruct->semLock));
 	
-	double tempGravityDir[3] = {0,0,1};
+	double tempGravityDir[3] = {0,0,-1};
 	int anglesCounter = 0;
 	double *R = angles;
 	double cs,si;
+	//std::cout << "axisDIr = ["<<axisDir[0] << " , "<<axisDir[1] << " , " << axisDir[2] << " , " << axisDir[3] << std::endl;
 
 	for(int i=0;i<numRBDBodies;i++){
 
@@ -268,6 +272,7 @@ int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, doubl
 				*(gravityDir + i*3 + 2) = R[2]*tempGravityDir[0] + R[5]*tempGravityDir[1] + R[8]*tempGravityDir[2];
 				anglesCounter += 9;
 				memcpy(tempGravityDir,(gravityDir + i*3),sizeofDouble*3);
+				//std::cout << "-calcGravityDirAndSave- angle case 0 of body: " << i << std::endl;
 				break;
 
 			case 1:
@@ -278,16 +283,18 @@ int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, doubl
 				*(gravityDir + i*3 + 2) = -si*tempGravityDir[1] + cs*tempGravityDir[2];
 				anglesCounter++;
 				memcpy(tempGravityDir,(gravityDir + i*3),sizeofDouble*3);
+				//std::cout << "-calcGravityDirAndSave- angle case 1 of body: " << i << " = " << *(angles + anglesCounter) << std::endl;
 				break;
 
 			case 2:
 				cs = cos(*(angles + anglesCounter));
 				si = sin(*(angles + anglesCounter));
 				*(gravityDir + i*3 + 0) = cs*tempGravityDir[0] - si*tempGravityDir[2];
-				*(gravityDir + i*3 + 1) = tempGravityDir[0];
+				*(gravityDir + i*3 + 1) = tempGravityDir[1];
 				*(gravityDir + i*3 + 2) = si*tempGravityDir[0] + cs*tempGravityDir[2];
 				anglesCounter++;
 				memcpy(tempGravityDir,(gravityDir + i*3),sizeofDouble*3);
+				//std::cout << "-calcGravityDirAndSave- angle case 2 of body: " << i << " = " << *(angles + anglesCounter) << std::endl;
 				break;
 
 			case 3:
@@ -298,14 +305,16 @@ int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, doubl
 				*(gravityDir + i*3 + 2) = tempGravityDir[2];
 				anglesCounter++;
 				memcpy(tempGravityDir,(gravityDir + i*3),sizeofDouble*3);
+				//std::cout << "-calcGravityDirAndSave- angle case 3 of body: " << i << " = " << *(angles + anglesCounter) << std::endl;
 				break;
 			default:
 				std::cout << "axis has invalid value in calcGravityDirAndSave from mySharedMemory. Axis was" <<  axisDir[i] << std::endl;
 				return 1;
 		}
+		//std::cout << "--calcGravityDirAndSave-- gravitydir body "<< i <<" =[" << *(gravityDir + i*3)<<" , " << *(gravityDir + i*3+1) << " , " << *(gravityDir + i*3+2) << std::endl;
 	}
 	sem_wait(&(shrdMemStruct->semLock));
-		memcpy(shrdMemStruct->gravityDir,gravityDir,sizeofDouble*numRBDBodies);
+		memcpy(shrdMemStruct->gravityDir,gravityDir,sizeofDouble*numRBDBodies*3);
 	sem_post(&(shrdMemStruct->semLock));
 	return 0;
 }
@@ -351,6 +360,8 @@ double returnLoadOnOuter(sharedMemoryStructForIntegration *shrdMemStruct){
 }
 
 int saveBodyLoadToSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, double load1x, double load1y, double load2x, double load2y, int bodynum ){
+
+	//std::cout << "--saveBodyLoadToSharedMem-- force on Body: " << bodynum << " = [" <<load1x << " , " << load1y << " , " << load2x << " , " << load2y << "]"<< std::endl;
 	
 	sem_wait(&(shrdMemStruct->semLock));
 		shrdMemStruct->appliedForceForFEM[bodynum][0] = load1x;

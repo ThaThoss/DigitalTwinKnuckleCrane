@@ -74,7 +74,9 @@ int getReactionForceAndSave(sharedMemoryStructForIntegration *shrdMemStruct, VAL
     //get Load On Outer
     double load1x = gravityDir[(numRBDBodies-1)*3]*loadOnOuter;
     double load1y = gravityDir[(numRBDBodies-1)*3 + 2]*loadOnOuter;
-
+    std::cout << "--getReactionForceAndSave-- load on body " << numRBDBodies-1 << " = [" << load1x << " , "<< load1y <<"]"<< std::endl;
+    std::cout << "--getReactionForceAndSave-- gravityDir " << numRBDBodies-1 << " = [" << gravityDir[(numRBDBodies-1)*3] << " , "<< gravityDir[(numRBDBodies-1)*3 +1] <<" , "<< gravityDir[(numRBDBodies-1)*3+2]<<"]"<< std::endl;
+    std::cout <<" load on outer = " << loadOnOuter << std::endl;
     double load2x = 0;
     double load2y = 0;
 
@@ -83,7 +85,8 @@ int getReactionForceAndSave(sharedMemoryStructForIntegration *shrdMemStruct, VAL
 
         saveBodyLoadToSharedMem(shrdMemStruct, load1x, load1y, load2x, load2y, i );
 
-        
+        //std::cout << "--getReactionForceAndSave-- gravityDir " << i+1 << " = [" << gravityDir[(i+1)*3] << " , "<< gravityDir[(i+1)*3 +1] <<" , "<< gravityDir[(i+1)*3+2]<<"]"<< std::endl;
+        std::cout << "--getReactionForceAndSave-- load on body " << i+1 << " = [" << load1x << " , "<< load1y << " , " << load2x <<" , " << load2y<<" ]"<< std::endl;
         mgx = AllvaluesForForceCalc[i].massTimesGravity*gravityDir[(i+1)*3];//gravityDir has numRBDBodies number of inputs (i+1)
         mgy = AllvaluesForForceCalc[i].massTimesGravity*gravityDir[(i+1)*3 + 2];
 
@@ -115,10 +118,10 @@ int getReactionForceAndSave(sharedMemoryStructForIntegration *shrdMemStruct, VAL
             return 1;
         }
     //Load on next body:
-        load1x = -leftHandSide[0];
-        load2y = -leftHandSide[1];
-        load2x = -leftHandSide[2];
-        load1y = -leftHandSide[3];
+        load1x = -leftHandSide[0]/5;
+        load2y = -leftHandSide[1]/5;
+        load2x = -leftHandSide[2]/5;
+        load1y = -leftHandSide[3]/5;
 
      /*       //{f1x,f2y,f2x,f1y}
     double leftHandSide[4][4] = {{1,0,1,0},//sum Fx
@@ -126,6 +129,9 @@ int getReactionForceAndSave(sharedMemoryStructForIntegration *shrdMemStruct, VAL
                                  {0,r1,r2,0},//sum Mom1
                                  {r3,0,0,r4}};//sum Mom2*/
     }
+    //std::cout << "--getReactionForceAndSave-- gravityDir " << 1 << " = [" << gravityDir[(1)*3] << " , "<< gravityDir[(1)*3 +1] <<" , "<< gravityDir[(1)*3+2]<<"]"<< std::endl;
+    std::cout << "--getReactionForceAndSave-- load on body " << 1 << " = [" << load1x << " , "<< load1y << " , " << load2x <<" , " << load2y<<" ]"<< std::endl;
+        
     saveBodyLoadToSharedMem(shrdMemStruct, load1x, load1y, load2x, load2y, 0 );//save the tower's force
     return 0;
 }
@@ -206,6 +212,7 @@ int distributeForceToMesh(sharedMemoryStructForIntegration *shrdMemStruct, share
         for(int j=0; j<nforceGroups[i];j++){
 
         sem_wait(&(shrdMemStruct->semLock));
+        //Calculated in getReactionForceAndSave
             loadx = *(shrdMemStruct->appliedForceForFEM[i] + j*numDegFreedom + 0);
             loady = *(shrdMemStruct->appliedForceForFEM[i] + j*numDegFreedom + 1);
         sem_post(&(shrdMemStruct->semLock));

@@ -46,18 +46,51 @@ void getBodyMeshdata(sharedMemoryPointers *shrMemPointers, MESHDATA *meshData, s
 
         memcpy(meshData->femJointPos, shmStru->femJointPos[meshData->bodyNumber], sizeof(double)*2);
         memcpy(meshData->femZeroPoint, shmStru->femZeroPoint[meshData->bodyNumber], sizeof(double)*2);
+        memcpy(meshData->forceNodes,shrMemPointers->forceNodes,sizeof(int)*meshData->numForce);
+        memcpy(meshData->forceGroup,shrMemPointers->forceGroup,sizeof(int)*meshData->numForce);
         meshData->deformationScale = shmStru->deformationScale[meshData->bodyNumber];
         meshData->bodyScale = shmStru->femBodyScale[meshData->bodyNumber];
+        std::cout << "meshData->deformationScale = " << meshData->deformationScale << "in body: " << meshData->bodyNumber << std::endl;
 
     sem_post(&(shmStru->semLock));
 
 }
 
 void moveBodieForViz(MESHDATA *meshData){
+
     for(int i=0;i<meshData->header[1];i++){
         *(meshData->Nodes + i*2) = *(meshData->Nodes + i*2) - meshData->femZeroPoint[0];
         *(meshData->Nodes + i*2 +1 ) = *(meshData->Nodes + i*2 + 1) - meshData->femZeroPoint[1];
     }
+}
+
+int getPreviousJointPos(const MESHDATA* meshdata ,double moveToXY[2]){
+
+    double X = 0;
+    double Y = 0;
+    int nNodesInGroup = 0;
+    int nodeNumb = 0;
+
+    for(int i=0; i<meshdata->numForce; i++){
+
+        if(*(meshdata->forceGroup + i)==0){
+            nodeNumb = *(meshdata->forceNodes + i);
+            X += *(meshdata->deformation + nodeNumb*2 );
+            Y += *(meshdata->deformation + nodeNumb*2 +1 );
+            nNodesInGroup++;
+        }
+    }
+
+    if(nNodesInGroup !=0){
+        X = X/nNodesInGroup;
+        Y = Y/nNodesInGroup;
+    }else if(nNodesInGroup == 0){
+        std::cout << "No nodes found in group 0 of body: " << meshdata->bodyNumber << std::endl;
+        return 1;
+    }
+    moveToXY[0] = X;
+    moveToXY[1] = Y;
+return 0;
 }
 
 using namespace std;
@@ -81,7 +114,7 @@ int main(int argc, char *argv[]){
     std::string host("127.0.0.1"); // If you need this server to be accessible on a different machine, use "0.0.0.0"
     ix::WebSocketServer serverKnuckle(port, host);
     ix::WebSocketServer serverFEM(femPort, host);
-  
+
         /*Shared memory section:*/
 
         // shmat to attach to shared memory
@@ -93,20 +126,36 @@ int main(int argc, char *argv[]){
     std::cout << "External Server Shared memory attatched" << std::endl;
 
     int bytesForPointer[4] = {0};
+sem_wait(&(shmStru->semLock));
+    int numFEMBodies = shmStru->numFEMBodies;
+    int numForce[numFEMBodies] = {0};
+    bytesForPointer[0] = shmStru->numBytesBefFEM;//5*sizeof(int)*3 set in main server
+sem_post(&(shmStru->semLock));
 
+    cout << "Waiting for femDataReady" << endl;
+    //Wait for the main server to populate the shared memory
+    int femDataReady = 0;
+    while(femDataReady<numFEMBodies){
+        sem_wait(&(shmStru->semLock));
+        femDataReady = shmStru->femDataReady;
+        sem_post(&(shmStru->semLock));
+        sleep(1);
+    }
+    cout << "Done Waiting for femDataReady" << endl;
+    
     sem_wait(&(shmStru->semLock));
-        int numFEMBodies = shmStru->numFEMBodies;
-        bytesForPointer[0] = shmStru->numBytesBefFEM;//5*sizeof(int)*3 set in main server
+    memcpy(numForce,shmStru->numForce,sizeof(double)*numFEMBodies);
     sem_post(&(shmStru->semLock));
 
     int headers[numFEMBodies][5] = {0};
     getFEMHeaders(headers, shmStru, numFEMBodies);
 
+    /*
     for(int i=0; i<numFEMBodies;i++){
         cout << "Header " << i << endl;
         cout << headers[i][0] << " , " << headers[i][1] << " , " << headers[i][2] << " , " << headers[i][3] << " , " << headers[i][4] << endl; 
     }
-
+*/
 
 
     MESHDATA meshdata[3];
@@ -114,15 +163,21 @@ int main(int argc, char *argv[]){
         int memCounter = 0;
         memcpy(meshdata[i].header,headers[i],sizeof(int)*5);
         meshdata[i].bodyNumber = i;
-        // 4*ints for elements, 5* double for nodes, deformation and vonMieses, 
-        meshdata[i].numBytes = meshdata->header[0]*sizeof(int)*4 + meshdata[i].header[1]*sizeof(double)*5;
-        cout << "meshdata["<<i<<"].numBytes " << meshdata[i].numBytes << endl;
+        meshdata[i].numForce = numForce[i];
+
+        // 4*ints for elements, 5* double for nodes, deformation, vonMieses, and forcenodes(ints) and force group (ints)
+        meshdata[i].numBytes = meshdata->header[0]*sizeof(int)*4 + meshdata[i].header[1]*sizeof(double)*5 + numForce[i]*sizeof(int)*2;
+        //cout << "meshdata["<<i<<"].numBytes = " << meshdata[i].numBytes << endl;
+
         meshdata[i].data = (char*)calloc(meshdata->numBytes,sizeof(char));
         if(!(meshdata[i].data)){
             cout << "Failed to allocate external server meshdata for body: " << i << endl;
             exit(1);
         }
-        cout << "Calloc succeded to allocate external server meshdata for body: " << i << endl;
+        //cout << "Calloc succeded to allocate external server meshdata for body: " << i << endl;
+
+
+        // Set pointers:
         meshdata[i].Elements = (int *)meshdata[i].data;
         memCounter += meshdata[i].header[0]*sizeof(int)*4;
 
@@ -135,18 +190,14 @@ int main(int argc, char *argv[]){
         meshdata[i].vonMieses = (double *)(meshdata[i].data + memCounter);
         memCounter += meshdata[i].header[1]*sizeof(double)*1;
 
-    }
-    int femDataReady = 0;
+        meshdata[i].forceNodes = (int *)(meshdata[i].data + memCounter);
+        memCounter += numForce[i]*sizeof(int);
 
-    cout << "Waiting for femDataReady" << endl;
-    
-    while(femDataReady<numFEMBodies){
-        sem_wait(&(shmStru->semLock));
-        femDataReady = shmStru->femDataReady;
-        sem_post(&(shmStru->semLock));
+        meshdata[i].forceGroup = (int *)(meshdata[i].data + memCounter);
+        memCounter += numForce[i]*sizeof(int);
+
     }
-    
-    cout << "Done Waiting for femDataReady" << endl;
+ 
 
     sharedMemoryPointers shmPointers[3];
     for(int i=0;i<numFEMBodies;i++){
@@ -156,24 +207,28 @@ int main(int argc, char *argv[]){
         cout << headers[i][0]<< " , " <<  headers[i][1] <<" , "<< headers[i][2] << " , " << headers[i][3] << " , "<< headers[i][4] << endl;
 
         getBodyMeshdata(&shmPointers[i], &meshdata[i], shmStru );
-        cout << "-----MeshData numBytes-----[" << bytesForPointer[i] << " , " << bytesForPointer[i+1] << "]"<< endl;
-                            cout << "-----Elements-----" << endl;
-        for(int k=0; k<meshdata[i].header[0]; k++ ){
-            //std::cout << "[ " << *(meshdata[i].Elements + k*4) << " , " << *(meshdata[i].Elements + k*4 +1) <<  " , " << *(meshdata[i].Elements + k*4 +2)<< " , " << *(meshdata[i].Elements + k*4 +3) << " ]" << std::endl; 
-        }
-        // move mesh to point of rotation fit with the other bodies in vizualisation
+
+        // move mesh so it's point of rotation is at [0,0] for vizualisation
         moveBodieForViz(&meshdata[i]);
 
     }
 
+    /*
+    for(int i =0; i<numFEMBodies;i++){
+        cout << "--------------- Force Nodes fomr external in Bodie: " << i << ",  with numFOrce = "<< meshdata[i].numForce <<"-----------------" << endl;
+        for(int j=0; j< meshdata[i].numForce; j++ ){
+            cout << *(meshdata[i].forceNodes + j) << "   " <<  *(meshdata[i].forceGroup +j) << endl;
+        }
+    }
+*/
 
     
 
-    cout <<"before serverFEM in External" << endl;
+    //cout <<"before serverFEM in External" << endl;
     serverFEM.setOnClientMessageCallback([&serverFEM, shmPointers, meshdata](std::shared_ptr<ix::ConnectionState> connectionState, ix::WebSocket & webSocket, const ix::WebSocketMessagePtr & msg) {
         // The ConnectionState object contains information about the connection,
         // at this point only the client ip address and the port.
-        std::cout << "Remote ip: " << connectionState->getRemoteIp() << std::endl;
+        //std::cout << "Remote ip: " << connectionState->getRemoteIp() << std::endl;
 
         if (msg->type == ix::WebSocketMessageType::Open)
         {
@@ -196,7 +251,7 @@ int main(int argc, char *argv[]){
         }
         else if (msg->type == ix::WebSocketMessageType::Message)
         {
-            std::cout << "FEM Received: " << msg->str << std::endl;
+           // std::cout << "FEM Received: " << msg->str << std::endl;
             
 
           
@@ -214,6 +269,7 @@ int main(int argc, char *argv[]){
             output["numBodies"] = numFemBodies;
             
             double angle = 0;
+            double moveX = 0, moveY = 0;
             for (int i = 0; i < numFemBodies; ++i) {
 
                 sem_wait(&(shmStru->semLock));
@@ -221,10 +277,13 @@ int main(int argc, char *argv[]){
                     memcpy(meshdata[i].vonMieses, shmPointers[i].vonMieses, meshdata[i].header[1]*sizeof(double)*1);
                     if(i>0){angle += shmStru->angles[i];}
                 sem_post(&(shmStru->semLock));
-                double cosTh = cos(angle);
-                double sinTh = sin(angle);
+                double cosTh = cos(-angle);
+                double sinTh = sin(-angle);
 
-                if(i==0){// Do not rotate body 0
+                double moveToXY[2] = {0};
+                
+
+                if(i==0){// Do not rotate or translate body 0
                     for(int j=0;j<meshdata[i].header[1];j++){
                         //Add nodes and deformation, nodes are already moved to zero.
                         *(meshdata[i].deformation +j*2) = *(meshdata[i].deformation +j*2)*meshdata[i].deformationScale + *(meshdata[i].Nodes +j*2);
@@ -233,12 +292,15 @@ int main(int argc, char *argv[]){
                         //Scale bodies
                         *(meshdata[i].deformation +j*2) = *(meshdata[i].deformation +j*2)*meshdata[i].bodyScale;
                         *(meshdata[i].deformation +j*2 + 1) = *(meshdata[i].deformation +j*2 + 1)*meshdata[i].bodyScale;
-                        //Move body to joint
-                        *(meshdata[i].deformation +j*2) = *(meshdata[i].deformation +j*2) + meshdata[i].femJointPos[0];
-                        *(meshdata[i].deformation +j*2 + 1) = *(meshdata[i].deformation +j*2 + 1) + meshdata[i].femJointPos[1];
 
                     }
                 }else{
+                    if(getPreviousJointPos(&meshdata[i-1], moveToXY)){
+                        std::cout << "problems with getPreviousJointPos in body :" << i << endl;
+                    }
+                    moveX = moveToXY[0];
+                    moveY = moveToXY[1];
+
                     for(int j=0;j<meshdata[i].header[1];j++){
                         //Add nodes and deformation, nodes are already moved to zero.
                         *(meshdata[i].deformation +j*2) = *(meshdata[i].deformation +j*2)*meshdata[i].deformationScale + *(meshdata[i].Nodes +j*2);
@@ -253,9 +315,10 @@ int main(int argc, char *argv[]){
                         //Scale bodies
                         *(meshdata[i].deformation +j*2) = *(meshdata[i].deformation +j*2)*meshdata[i].bodyScale;
                         *(meshdata[i].deformation +j*2 + 1) = *(meshdata[i].deformation +j*2 + 1)*meshdata[i].bodyScale;
+
                         //Move body to joint
-                        *(meshdata[i].deformation +j*2) = *(meshdata[i].deformation +j*2) + meshdata[i].femJointPos[0];
-                        *(meshdata[i].deformation +j*2 + 1) = *(meshdata[i].deformation +j*2 + 1) + meshdata[i].femJointPos[1];
+                        *(meshdata[i].deformation +j*2) = *(meshdata[i].deformation +j*2) + moveX;
+                        *(meshdata[i].deformation +j*2 + 1) = *(meshdata[i].deformation +j*2 + 1) + moveY;
 
                     }
                 }
@@ -318,7 +381,7 @@ int main(int argc, char *argv[]){
         }
     });
     
-    cout <<"before serverKnuckle in External" << endl;
+    //cout <<"before serverKnuckle in External" << endl;
     serverKnuckle.setOnClientMessageCallback([&serverKnuckle](std::shared_ptr<ix::ConnectionState> connectionState, ix::WebSocket & webSocket, const ix::WebSocketMessagePtr & msg) {
         // The ConnectionState object contains information about the connection,
         // at this point only the client ip address and the port.
@@ -429,14 +492,14 @@ int main(int argc, char *argv[]){
     
     auto resKnuckle = serverKnuckle.listen();
     if (!resKnuckle.first) {
-        cout << "something wrong with listen" << endl; 
+        cout << "something wrong with listen in serverExternal Knuckle" << endl; 
         std::cerr << "Error during listen: " << resKnuckle.second << std::endl;
         return 1;
     }
 
     auto resFem = serverFEM.listen();
     if (!resFem.first) {
-        cout << "something wrong with listen" << endl; 
+        cout << "something wrong with listen in serverExternal FEM" << endl; 
         std::cerr << "Error during listen: " << resFem.second << std::endl;
         return 1;
     }
@@ -459,6 +522,10 @@ int main(int argc, char *argv[]){
     serverKnuckle.wait();
     serverFEM.wait();
     controllThread.join();
+    for(int i=0;i<numFEMBodies;i++){
+        free(meshdata[i].data);
+    }
+    shmdt(shmStru); 
     cout << "External server closed" << endl;
 
 }//main()

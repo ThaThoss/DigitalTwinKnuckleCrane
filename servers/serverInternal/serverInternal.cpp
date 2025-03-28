@@ -158,7 +158,7 @@ int main(int argc, char *argv[]){
     int maxGrupNum = 0;
     for(int j=0; j<nFEMBodies;j++){
 
-        for (int i=0; i<shmStru->numForce[j];i++){
+        for (int i=0; i<shmStru->numForce[j]; i++){
             if(preGroupNum <= shmPointers[j].forceGroup[i]){
                 preGroupNum = shmPointers[j].forceGroup[i]+1;
             }     
@@ -195,16 +195,16 @@ int main(int argc, char *argv[]){
     
     while(gogo){
 
-        cout << "In com loop Internal, waiting for loops to finish" << endl;
+        //cout << "In com loop Internal, waiting for loops to finish" << endl;
         for (int i = 0; i < nFEMBodies; i++) {
             sem_wait(&semSyncWait);
         }
-        cout << "In com loop Internal, done waiting, calc forces" << endl;
+        //cout << "In com loop Internal, done waiting, calc forces" << endl;
 
         getAnglesFromSharedMem(shmStru, angles);
         calcGravityDirAndSave( shmStru, angles, gravityDir);
 
-        cout << "In com loop Internal, get mass and FOrce " << endl;
+        //cout << "In com loop Internal, get mass and FOrce " << endl;
         check = getMassAccandMomZfromShm(shmStru, valuesForForceCalc, nFEMBodies);//acc and Mmm      
         check = getReactionForceAndSave(shmStru, valuesForForceCalc, nFEMBodies, nRBDBodies, gravityDir, loadOnOuter );
       
@@ -214,10 +214,10 @@ int main(int argc, char *argv[]){
             std::cout << "Error in getReactionForce, shutting down from forceKnuckleToFEMLoop" << std::endl;
             dontGogo( shmStru);
         }
-        cout << "In com loop Internal, save to mesh " << endl;
+        //cout << "In com loop Internal, save to mesh " << endl;
         distributeForceToMesh(shmStru, shmPointers, valuesForForceCalc, numNodesPerForceGroup, nforceGroups, maxGrupNum);
 
-        cout << "In com loop Internal, start loops " << endl;
+        //cout << "In com loop Internal, start loops " << endl;
         for (int i = 0; i < nFEMBodies; i++) {
             sem_post(&semSyncGo);
         }

@@ -95,7 +95,7 @@ int ReceiveInt32(int sockfd, int *returnValue){
 		}
 	}while(left>0);
 	*returnValue = (int)ntohl(ret);
-	printf("Received the int %d\n",*returnValue);
+	//printf("Received the int %d\n",*returnValue);
 	return 0;
 }
 
@@ -122,7 +122,7 @@ int ReceiveNInts(int sockfd, int *Integers, int size){
 			recieved += rc;
 		}
 	}while(left>0);
-	printf("recieveNInts got %d bytes\n",recieved);
+	//printf("recieveNInts got %d bytes\n",recieved);
 	return 0;
 }
 
@@ -154,7 +154,7 @@ int SendInt32(int sockfd, int intToSend){
 			left -= rc;
 		}
 	}while (left > 0);
-	printf("the int %d sent\n",intToSend );
+	//printf("the int %d sent\n",intToSend );
 	}else{
 		printf("Did not recieve ready in SendInt32\n");
 		return 1;
@@ -236,7 +236,7 @@ int ReceiveNIntsNoBlock(int sockfd, int *Integers, int size){
 			recieved += rc;
 		}
 	}while(left>0);
-	printf("recieveNInts got %d bytes\n",recieved);
+	//printf("recieveNInts got %d bytes\n",recieved);
 	return 0;
 }
 int SendNIntsNoBlock(int sockfd, int *IntsToSend, int size){
@@ -255,7 +255,7 @@ int SendNIntsNoBlock(int sockfd, int *IntsToSend, int size){
 		}
 	}while(left >0);
 
-	printf("Sent %d integers\n",sent);
+	//printf("Sent %d integers\n",sent);
 	return 0;
 
 }
@@ -284,7 +284,7 @@ int SendNInts(int sockfd, int *IntsToSend, int size){
 	}else{
 		error("SendNInts did not recieve ready\n");
 	}
-	printf("Sent %d bytes of integers\n",sent);
+	//printf("Sent %d bytes of integers\n",sent);
 	return 0;
 
 }
@@ -308,7 +308,7 @@ int ReceiveNDoubles(int sockfd, double *doublesToGet, int size){
 			sent += rc;
 		}
 	}while(left>0);
-	printf("recieveNDoubles got %d bytes\n",sent);
+	//printf("recieveNDoubles got %d bytes\n",sent);
 	return 0;
 }
 
@@ -337,7 +337,7 @@ int SendNDoubles(int sockfd, double *doublesToSend, int size){
 	}else{
 		printf("sendNDoubles did not receive ready\n");
 	}
-	printf("sent %d bytes of doubles\n",sent);
+	//printf("sent %d bytes of doubles\n",sent);
 	return 0;
 }
 
@@ -360,7 +360,7 @@ int SendNDoublesNoBlock(int sockfd, double *doublesToSend, int size){
 		}
 	}while(left>0);
 
-	printf("sent %d bytes of doubles\n",sent);
+	//printf("sent %d bytes of doubles\n",sent);
 	return 0;
 }
 
@@ -381,7 +381,7 @@ int ReceiveNDoublesNoWrite(int sockfd, double *doublesToGet, int size){
 			sent += rc;
 		}
 	}while(left>0);
-	printf("recieveNDoubles got %d bytes\n",sent);
+	//printf("recieveNDoubles got %d bytes\n",sent);
 	return 0;
 }
 

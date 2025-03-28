@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    canvas {
+      border: 1px solid #000000;
+      cursor: grab;
+    }
+
+    #lineCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+<canvas id="lineCanvas"></canvas>
+
+<script>
+  const canvas_ele = document.getElementById("lineCanvas");
+  const ctx = canvas_ele.getContext("2d");
+
+  let offsetX = window.innerWidth / 2;
+  let offsetY = window.innerHeight / 2;
+  let scale = 1;
+  let isDragging = false;
+  let lastX, lastY;
+
+  let lastJsonData = null;
+
+  function getColorBasedOnStress(stress, maxStress, minStress) {
+    let hue = 240 - ((stress - minStress) / (maxStress - minStress) * 240);
+    return `hsl(${Math.max(0, hue)}, 100%, 50%)`;
+  }
+
+  function drawMeshWithStress(elements, stressValues, Nodes, maxStress, minStress) {
+    const nodesPerElement = 4;
+    const baseScale = 70;
+
+    for (let i = 0; i < elements.length; i++) {
+      for (let j = 0; j < nodesPerElement; j++) {
+        const startNodeIndex = elements[i][j];
+        const endNodeIndex = elements[i][(j + 1) % nodesPerElement];
+
+        const startX = Nodes[startNodeIndex][0] * baseScale * scale + offsetX;
+        const startY = -Nodes[startNodeIndex][1] * baseScale * scale + offsetY;
+        const endX = Nodes[endNodeIndex][0] * baseScale * scale + offsetX;
+        const endY = -Nodes[endNodeIndex][1] * baseScale * scale + offsetY;
+
+        const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+        gradient.addColorStop(0, getColorBasedOnStress(stressValues[startNodeIndex], maxStress, minStress));
+        gradient.addColorStop(1, getColorBasedOnStress(stressValues[endNodeIndex], maxStress, minStress));
+
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+  }
+
+  function renderData(data) {
+    ctx.clearRect(0, 0, canvas_ele.width, canvas_ele.height);
+
+    let count = 0;
+    const maxStressList = [5610.0, 101610.0, 51610.0];
+
+    for (const [key, body] of Object.entries(data)) {
+      const { Nodes, Elements, vonMieses } = body;
+      const minStress = 0.0267;
+      const maxStress = maxStressList[count++] || 10000;
+      drawMeshWithStress(Elements, vonMieses, Nodes, maxStress, minStress);
+    }
+  }
+
+  function resizeCanvas() {
+    canvas_ele.width = window.innerWidth;
+    canvas_ele.height = window.innerHeight;
+  }
+
+  // 🧭 Panning
+  canvas_ele.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    canvas_ele.style.cursor = "grabbing";
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
+
+  canvas_ele.addEventListener('mouseup', () => {
+    isDragging = false;
+    canvas_ele.style.cursor = "grab";
+  });
+
+  canvas_ele.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      offsetX += e.clientX - lastX;
+      offsetY += e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (lastJsonData) renderData(lastJsonData);
+    }
+  });
+
+  // 🔍 Zoom
+  canvas_ele.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomFactor = 1.1;
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    const prevScale = scale;
+
+    scale *= (e.deltaY < 0) ? zoomFactor : 1 / zoomFactor;
+
+    offsetX = mouseX - (mouseX - offsetX) * (scale / prevScale);
+    offsetY = mouseY - (mouseY - offsetY) * (scale / prevScale);
+
+    if (lastJsonData) renderData(lastJsonData);
+  }, { passive: false });
+
+  // 🧪 Initial dummy data
+  function loadFallbackData() {
+    lastJsonData = {
+      "Body1": {
+        Nodes: [[0, 0], [1, 0], [1, 1], [0, 1], [2, 1], [2, 0]],
+        Elements: [
+          [0, 1, 2, 3],
+          [1, 5, 4, 2]
+        ],
+        vonMieses: [50, 100, 200, 300, 400, 500]
+      }
+    };
+    renderData(lastJsonData);
+  }
+  function connectWebSocket() {
+  const socket = new WebSocket('ws://127.0.0.1:8082');
+
+  socket.addEventListener('open', () => {
+    console.log('WebSocket connected');
+
+    // Send request every second
+    setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send('Requesting JSON data');
+      }
+    }, 100); // Adjust frequency here (ms)
+  });
+
+  socket.addEventListener('message', (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      lastJsonData = data;
+      renderData(data);
+    } catch (err) {
+      console.error('Invalid JSON:', err);
+    }
+  });
+
+  socket.addEventListener('error', (err) => {
+    console.warn('WebSocket error — falling back to static mode.', err);
+    loadFallbackData();
+  });
+
+  socket.addEventListener('close', () => {
+    console.warn('WebSocket closed — using fallback.');
+    loadFallbackData();
+  });
+}
+
+  // ✅ Init
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    if (lastJsonData) renderData(lastJsonData);
+  });
+
+  window.addEventListener('load', () => {
+    resizeCanvas();
+    loadFallbackData(); // default fallback
+    connectWebSocket(); // try live mode
+  });
+</script>
+</body>
+</html>

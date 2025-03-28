@@ -9,6 +9,7 @@ typedef struct {
     double femJointPos[2] = {0};
     double femZeroPoint[2] = {0};
     int header[5] = {0};
+    int numForce = 0;
 
     int deformationScale = 1;
     int bodyScale = 1;
@@ -18,6 +19,8 @@ typedef struct {
     double *vonMieses;
 
     int *Elements;
+    int *forceNodes;
+    int *forceGroup;
 
     char *data;
 
@@ -28,6 +31,8 @@ void serverKnuckleControllLoop( ix::WebSocketServer *serverKnuckle, ix::WebSocke
 
 void getBodyMeshdata(sharedMemoryPointers *shrMemPointers, MESHDATA *meshData, sharedMemoryStructForIntegration *shmStru );
 
-void moveBodieForViz(MESHDATA *meshData,double zeroPoint[2]);
+void moveBodieForViz(MESHDATA *meshData);
+
+int getPreviousJointPos(MESHDATA* meshdata ,double moveToXY[2]);
 
 

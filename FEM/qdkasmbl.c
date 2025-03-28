@@ -41,6 +41,17 @@ int qdKassemble( double *A, int *connect, double *coord, int *el_matl, double *f
 	double stress_el[sdim]={0}, strain_el[sdim]={0}, xxaddyy, xxsubyy, xysq;
 	double gravityConst = 9.81, elementArea = 0.0;
 
+	int bodyNum = 0;
+	if(numel==2460){
+		bodyNum = 1;
+	}else if(numel==2220){
+		
+		bodyNum = 2;
+	}else if(numel==1328){
+		bodyNum=3;
+	}
+
+
 
 	
 	for( k = 0; k < numel; k++ ) {
@@ -108,7 +119,7 @@ int qdKassemble( double *A, int *connect, double *coord, int *el_matl, double *f
 		elementArea = qdArea(coord_el_trans);
 
 		if(elementArea<=0.00001){
-			printf("Area of element nr %d, negative or close to zero. Area = %lf\n",k,elementArea);
+			printf("Area of element nr %d, negative or close to zero in bodie %d. Area = %lf\n",k,bodyNum,elementArea);
 			printf("coord_el_trans = [%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf]\n",*coord_el_trans,*(coord_el_trans+1),*(coord_el_trans+2),*(coord_el_trans+3),*(coord_el_trans+4),*(coord_el_trans+5),*(coord_el_trans+6),*(coord_el_trans+7));
 		}
 

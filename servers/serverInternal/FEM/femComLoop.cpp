@@ -97,9 +97,22 @@ void femComLoop(int femBodyNumber, int bytesForPointer,int shmid, char femIp[16]
 	check = qdClientReader(&dataToSend, femDatFile);
 
 
+
 	check = distrubuteFemSharedMemPointers( shmStru, &sharedPointers, femBodyNumber, bytesForPointer );
 	
 	check = saveFemData( shmStru, &dataToSend, &sharedPointers, femBodyNumber, bytesForPointer );
+
+
+/*
+sem_wait(&(shmStru->semLock));
+	cout << "Number of force nodes: " << dataToSend.numForce << endl;
+	cout << "Force Node Number,   Group number  " << endl;
+	for(int i=0; i< dataToSend.numForce; i++ ){
+		cout << *(sharedPointers.forceNodes+i) << "   " <<  *(sharedPointers.forceGroup +i) << endl;
+	}
+sem_post(&(shmStru->semLock));
+*/
+
 
 	int numBytesToRecieve = (dataToSend.degOfFreedom +dataToSend.numNodPnt)*sizeof(double);
 	double *dataToReceive = (double* )calloc(numBytesToRecieve,sizeofDouble);
@@ -177,26 +190,29 @@ void femComLoop(int femBodyNumber, int bytesForPointer,int shmid, char femIp[16]
 	
 	check = qdClientSender(&dataToSend,sockfd);
 	while(gogo[0]){
-		printf("-----------Waiting to recieve-------------\n");
+		
+		//printf("-----------Waiting to recieve-------------\n");
 		ReceiveNChars( sockfd, (char*)dataToReceive, numBytesToRecieve);
 
 		count++;
         // Signal completion to controll thread
         sem_post(semSyncWait);
-        printf("Fem loop %d: Finished work, waiting...\n", femBodyNumber);
+        //printf("Fem loop %d: Finished work, waiting...\n", femBodyNumber);
 
         // Wait for reset
         sem_wait(semSyncGo);
-        printf("Fem loop %d: Starting next cycle...\n", femBodyNumber);
+        //printf("Fem loop %d: Starting next cycle...\n", femBodyNumber);
 		getForceFromShardeMem( force, gravityDirection, shmStru, &sharedPointers, dataToSend.numForce, femBodyNumber);
 
+
+		*gogo = isGogo(shmStru);
 		// buffer = [Force x and y, gravity x and y, gogo int]
 		SendNChar(sockfd,  dataBufferForSend, bytesToSend );
 
 		check =	saveDeformationToSharedMemory( shmStru,  &dataToSend,  &sharedPointers, nodalDeformation);
 		check = saveVonMiesesToSharedMemory( shmStru,  &dataToSend,  &sharedPointers, vonMieses);
 
-		*gogo = isGogo(shmStru);
+		
 		
 	}
 

@@ -1,0 +1,178 @@
+// HTML and JavaScript for connecting via WebSocket and handling JSON data
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        canvas {
+          border: 1px solid #000000;
+        }
+  
+        #lineCanvas {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
+    </style>
+
+</head>
+<body>
+    <canvas id="lineCanvas"></canvas>
+
+    <script>
+        var canvas_ele = document.getElementById("lineCanvas");
+        var ctx = canvas_ele.getContext("2d");
+
+        function sleep(ms) {
+         return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+
+        function getColorBasedOnStress(stress,maxStress,minStress) {
+                //var minStress = 0.0267; // Define your own min stress Math.min(stress)
+                //var maxStress = 101610.0; // Define your own max stress Math.max(stress)
+                var hue = 240 - ((stress - minStress) / (maxStress - minStress) * 240);
+                if(hue<0){
+                hue = 0;
+                }
+                return `hsl(${hue}, 100%, 50%)`; // HSL color space goes from red to blue as the hue varies from 0 to 240
+        }
+
+        function drawMeshWithStress(elements,stressValues,Nodes, maxStress, minStress){
+            var scale = 70;
+            var nodesPerElement = 4;
+            var moveX = window.innerWidth / 2 - window.innerWidth / 5 ;
+            var moveY = window.innerHeight / 2 + window.innerHeight / 5;
+            //var minStress = 0.0267;
+            //var maxStress = 101610.0;
+
+
+            for (let i = 0; i < elements.length; i++) {
+            for (let j = 0; j < nodesPerElement; j++) {
+                var startNodeIndex = elements[i][j];
+                var endNodeIndex = elements[i][(j + 1) % nodesPerElement];
+                
+                var startX = Nodes[startNodeIndex][0]*scale+moveX;
+                var startY = -Nodes[startNodeIndex][1]*scale+moveY;
+                var endX = Nodes[endNodeIndex][0]*scale+moveX;
+                var endY = -Nodes[endNodeIndex][1]*scale+moveY;
+                
+                var gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+                var colorStart = getColorBasedOnStress(stressValues[startNodeIndex], maxStress, minStress);
+                var colorEnd = getColorBasedOnStress(stressValues[endNodeIndex], maxStress, minStress);
+                
+                gradient.addColorStop(0, colorStart);
+                gradient.addColorStop(1, colorEnd);
+                
+                ctx.beginPath();  // Start a new path for each side of the quad
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 2;
+                ctx.stroke();    // Apply the stroke to just this line
+            }
+            }
+        }
+        // Function to resize the canvas to fill the screen
+        function resizeCanvas() {
+            canvas_ele.width = window.innerWidth;
+            canvas_ele.height = window.innerHeight;
+        }
+
+         // Call the resizeCanvas function when the window is resized
+        window.addEventListener('resize', resizeCanvas, false);
+
+        // Call the resizeCanvas function initially
+        resizeCanvas();
+
+
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+        // Replace with your WebSocket server URL
+        const wsUrl = 'ws://127.0.0.1:8082';/*ws://158.37.70.146:8082*/
+        var socket = new WebSocket(wsUrl);
+
+
+        // Handle WebSocket connection open event
+        socket.addEventListener('open', (event) => {
+            console.log('WebSocket connection established.',event);
+            // Send a request for the JSON data
+            socket.send('Requesting JSON data');
+        });
+
+        // Handle WebSocket message event
+        socket.addEventListener('message', (event) => {
+            console.log('Message received from server:', event.data);
+
+            try {
+                // Parse the JSON data
+                const jsonData = JSON.parse(event.data);
+                console.log('Parsed JSON data:', jsonData);
+
+                // Display parsed data in the HTML
+                // const outputDiv = document.getElementById('output');
+                //outputDiv.textContent = '';
+
+                // Clear the canvas before drawing
+                ctx.clearRect(0, 0, canvas_ele.width, canvas_ele.height);
+                var minStressList = [0.0,0.0,0.0];
+                var maxStressList = [5610.0,101610.0,51610.0];
+                var count = 0;
+                
+                // Iterate over all bodies dynamically
+                for (const [key, body] of Object.entries(jsonData)) {
+                   
+                    console.log(`Processing ${key}:`);
+
+                    // Access Nodes, Elements, and vonMieses for the current body
+                    const nodes = body.Nodes;
+                    const elements = body.Elements;
+                    const vonMieses = body.vonMieses;
+
+                    console.log(`${key} Nodes:`, nodes);
+                    console.log(`${key} Elements:`, elements);
+                    console.log(`${key} vonMieses:`, vonMieses);
+
+                    var minStress = 0.0267;
+                    var maxStress = maxStressList[count];
+                    count++;
+
+
+                    drawMeshWithStress(elements,vonMieses,nodes, maxStress, minStress);
+
+
+                    // Append data to the HTML output
+                    /* const bodyData = `
+                       ${key}:
+                        Nodes: ${JSON.stringify(nodes)}
+                        Elements: ${JSON.stringify(elements)}
+                        vonMieses: ${JSON.stringify(vonMieses)}
+                    `;
+                    outputDiv.textContent += `\n${bodyData}\n`;*/
+                }
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+            }
+
+            //sleep(5000)
+            socket.send('Requesting JSON data');
+        });
+
+        // Handle WebSocket error event
+        socket.addEventListener('error', (error) => {
+            console.error('WebSocket error:', error);
+        });
+
+        // Handle WebSocket close event
+        socket.addEventListener('close', () => {
+            console.log('WebSocket connection closed.');
+        });
+    });
+</script>
+
+</body>
+</html>

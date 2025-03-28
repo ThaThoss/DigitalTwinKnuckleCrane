@@ -212,29 +212,32 @@ for( i = 0; i < dataToSend->numEl; i++ ) {
 /*    3) bc.num_force contains the total number of nodes where          */ 
 /*       a force has been prescribed                                    */ 
 	counter = 0;
-	//printf( "force vector for node: " );
+	printf( "force vector for node: " );
 	fscanf( femDatFile, "%d", dataToSend->integers.nodesWithForce);
-	//printf( "(%4d)", *(dataToSend->integers.nodesWithForce));
+	printf( "(%4d)", *(dataToSend->integers.nodesWithForce));
 	while( *(dataToSend->integers.nodesWithForce + counter) > -1 ) {
 		for( j = 0; j < numDegOfFreedom; j++ ) {
-			fscanf( femDatFile, "%lf ", (dataToSend->doubles.force+counter*2+j));
-	//		printf( "%16.4f "  , *(dataToSend->doubles.force+counter*2+j));
-        }
-		fscanf( femDatFile, "(%4d)", dataToSend->integers.forceGroup+counter); 
-        fscanf( femDatFile, "\n");
-	//	printf( "\n" );
-	//	printf( "force vector for node: ");
+			fscanf( femDatFile, "%lf", (dataToSend->doubles.force+counter*2+j));
+			printf( "%16.4f "  , *(dataToSend->doubles.force+counter*2+j));
+		}
+			fscanf( femDatFile, "%d", dataToSend->integers.forceGroup+counter); 
+			printf("  %d  \n", *(dataToSend->integers.forceGroup+counter));   
+			//fscanf( femDatFile, "\n");
+	
+		printf( "force vector for node: ");
 		counter++;
 		fscanf( femDatFile, "%d", dataToSend->integers.nodesWithForce + counter);
-	//	printf( "(%4d)" ,  *(dataToSend->integers.nodesWithForce + counter));
-
+		printf( "(%4d)" ,  *(dataToSend->integers.nodesWithForce + counter));
 	}
+	printf( "\n" );
+
 	dataToSend->numForce = counter;
 	fscanf( femDatFile, "\n" );
 	fgets( buffer, BUFSIZ, femDatFile );
 	//printf( "\n\n" );
 
 	return 0;
+
 }	
 /*------------------------------------------------*/
 int qdClientInitialSender(FEMDATATOSEND *dataToSend,int sockfd){

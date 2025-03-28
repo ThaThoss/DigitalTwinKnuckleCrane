@@ -1,7 +1,7 @@
 numel numnp nmat plane_stress_flag gravity_Flag
 2460 2566   1   1   1
 matl no., E modulus, Poisson Ratio, mass 
-  0 30000000.000000 0.300000 1.000000
+  0 30000000.000000 0.300000 5.000000
 el no.,connectivity, matl no
   0  53 774 1951 878   1
   1 229 1230 1951 774   1

@@ -269,15 +269,13 @@ for( i = 0; i < dataToSend->numEl; i++ ) {
 		for( j = 0; j < numDegOfFreedom; j++ ) {
 			fscanf( femDatFile, "%lf ", (dataToSend->doubles.force+counter*2+j));
 			printf( "%16.4f "  , *(dataToSend->doubles.force+counter*2+j));
-        }
-			fscanf( femDatFile, "(%4d)", dataToSend->integers.forceGroup+counter);    
-			fscanf( femDatFile, "\n");
+		}
+		fscanf( femDatFile, "(%4d)", dataToSend->integers.forceGroup+counter); 
+		fscanf( femDatFile, "\n");
 		printf( "\n" );
 		printf( "force vector for node: ");
 		counter++;
 		fscanf( femDatFile, "%d", dataToSend->integers.nodesWithForce + counter);
-		printf( "(%4d)" ,  *(dataToSend->integers.nodesWithForce + counter));
-
 	}
 	dataToSend->numForce = counter;
 	fscanf( femDatFile, "\n" );

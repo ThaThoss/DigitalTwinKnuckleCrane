@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <math.h>
 #include <time.h>
 #include "Server.h"
@@ -11,6 +12,22 @@ int qdCalcForce(double * force, double *tempForce,double *nodalMass, BOUND bc,FO
 int qdSaveInverse(double* inverse, int neqn, char fileName[]);
 int qdInverseReader(double* inv, int neqn, char fileName[]);
 
+int compareMatrices(double* A, double* B, int size, double tol) {
+	double diff = 0;
+	for (int i = 0; i < size * size; i++) {
+		diff = fabs(A[i] - B[i]);
+		if (fabs(A[i] - B[i]) > tol) {
+			printf("Mismatch at index %d: %f vs %f, diff was: %lf\n", i, A[i], B[i], diff);
+		}
+	}
+	return 1;
+}
+volatile sig_atomic_t stop = 0;
+
+void handle_sigint(int sig) {
+    printf("\nSIGINT received! Shutting down...\n");
+    stop = 1;
+}
 
 int main(int argc, char** argv)
 {
@@ -37,6 +54,12 @@ int main(int argc, char** argv)
 	double  *coord, *force, *tempForce, *U, *A;	
 	double  *node_counter, *nodalMass;	
 	double  g;
+
+	struct sigaction sa;
+	sa.sa_handler = handle_sigint;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0; 
+	sigaction(SIGINT, &sa, NULL);
 	
 	sockfd = atoi(argv[1]);
 	rc = write(sockfd,"200",sizeof("200"));
@@ -54,6 +77,7 @@ int main(int argc, char** argv)
 	numnp = sizes.numnp;
 	plane_stress_flag = sizes.plane_stress_flag;
 	gravity_flag = forceStruct.gravity_flag;
+	int bodyNum = 0;
 	printf("nmat = %d, numel = %d, numnp = %d, planeFlag = %d, gravityFlg = %d",nmat,numel,numnp,plane_stress_flag,gravity_flag);
 	//add gravity value to initial value reciever
 	// {{2460, 2566,   1,   1,   1},{2220, 2397,   1,   1,   1},{1328, 1468,   1,   1,   1}};
@@ -61,10 +85,13 @@ int main(int argc, char** argv)
 	char stiffnessFileMname[24] = {0};
 	if(numel==2460){
 		strcpy(stiffnessFileMname, "towerInverse.dat");
+		bodyNum = 1;
 	}else if(numel==2220){
 		strcpy(stiffnessFileMname, "boomInverse.dat");
+		bodyNum = 2;
 	}else if(numel==1328){
 		strcpy(stiffnessFileMname, "outerInverse.dat");
+		bodyNum=3;
 	}
 
 /* Create local shape functions at gauss points */
@@ -192,7 +219,7 @@ printf("\n\n");
 	//printf("neqn is : %d, and dof is: %d\n" ,neqn,dof);
 	sofmA = neqn * neqn;
 	MemoryCounter += sofmA*sizeof(double);	
-	A = (double *)calloc(sofmA, sizeof(double));
+	A = (double *)calloc(sofmA, sizeof(double)); 
 	if(!A) {
 	    printf(" Failed to allocate memory for A double \n");
      	exit(1);
@@ -216,31 +243,24 @@ printf("\n\n");
 	solutionVec = (double *)calloc(neqn,sizeof(double));
 	vonMieses = (dataToSend+dof);
 	double *inv = (double *)calloc(sofmA,sizeof(double));
-	//check = solveGauss(A, force, id, neqn, dof);
-	//if(!check) printf( " Problems with solve \n");
-/*
-printf("A = [");
-	for(int i=0;i<neqn;i++){
-		for(int j=0;j<neqn;j++){
-			if(*(A + neqn*i +j)>0 || *(A + neqn*i +j)<0){
-				printf("%lf,",*(A + neqn*i +j));
-			}
-		}
-		printf(";\n");
-	}
-printf("]\n\n");
 
-		for( i = 0; i<dof; i++){
-			printf("force[%d]=%lf\n",i,*(force+i));
-		}	
-*/
 	printf("reading Inverse from file...");
 	qdInverseReader(inv, neqn, stiffnessFileMname);
 	printf("Initial Solver started\n");
+	//To speed up the demonstration, the solution for the specific simulation has been saved. Uncomment this for future use
 	//solve( solutionVec, inv, A, force, neqn);
 	matvecmult(solutionVec,inv,force,neqn,neqn);
-	free(A);
+	
 	//qdSaveInverse(inv,neqn,  stiffnessFileMname);
+	//qdInverseReader(A, neqn, stiffnessFileMname);
+/*
+	int tol = 0.01;
+	printf("--------------------Comparing Matrices-----------------\n");
+	compareMatrices( A,  inv, neqn, tol);
+	free(A);
+	printf("--------------------Done Comparing Matrices-----------------\n");
+*/
+
 
 // Start of FEM Loop //
 // -------------------------------------------------------------//
@@ -266,9 +286,9 @@ printf("Starting qdKassmembleStress\n");
 	if(!check) printf( "Problems with qdKassembler \n");
 
 	name[0] = 'd';
-	check = qdwriter( bc, connect, coord, el_matl,  id, matl, 
-			name, strain, strain_node, stress, stress_node, U, vonMieses);
-	if(!check) printf( "Problems with qdwriter \n");
+	//check = qdwriter( bc, connect, coord, el_matl,  id, matl, 
+	//		name, strain, strain_node, stress, stress_node, U, vonMieses);
+	//if(!check) printf( "Problems with qdwriter \n");
 
 
 	int gogo=1;
@@ -280,9 +300,9 @@ printf("Starting qdKassmembleStress\n");
 
 
 	printf("Starting FEM loop... \n");
-	while(gogo){
+	while(gogo && !stop){
 		//Send solution, x,y translation, and von mieses stress;
-		printf("Sending Result \n");
+		
 		if( SendNChar(sockfd,(char*)dataToSend ,numBytesToSend )){
 			printf("problem with sending solution");
 		}
@@ -290,16 +310,21 @@ printf("Starting qdKassmembleStress\n");
 		//recieve force
 		printf("Requesting Force Result \n");
 		gogo = recieveForce( bc, forceStruct, sockfd);
+		printf("Recieved force, gravity x,y = [%lf , %lf] \n", *(forceStruct.gravity_X),*(forceStruct.gravity_Y));
 
 		//calculate force
 		qdCalcForce(force, tempForce, nodalMass, bc, &forceStruct, id);
-		// Print solution	
 		/*
-		for( i = 0; i<dof; i++){
-			printf("force[%d]=%lf\n",i,*(force+i));
-		}	
-*/
-		
+		if(bodyNum==3){
+			printf("----------------------Force:--------------------\n\n\n");
+			for(int i=0; i<numnp;i++){
+
+				printf("%d: %lf, %lf\n", i, *(force+i*2), *(force +i*2 +1));
+
+			}
+			printf("\n\n\n");
+		}
+		*/
 		//solve again
 		matvecmult(solutionVec,inv,force,neqn,neqn);
 		counter = 0;
@@ -318,34 +343,28 @@ printf("Starting qdKassmembleStress\n");
 		check = qdKassembleStress( connect, coord, el_matl, 	
 				matl, node_counter, dataToSend, strain, strain_node, stress, 
 				stress_node, vonMieses); 
-	/*
+/*
+	if(bodyNum==3){
 		for( int i = 0; i<numnp; i++){
 			printf("VonMieses[%d]=%lf\n",i,*(vonMieses+i));
 		}
-	*/
-
+	}
+*/
 
 	}
-	close(sockfd);
-	printf("free(strain);\n");
-	free(strain);
-	
 
-	printf("free(matl);\n");
+	close(sockfd);
+	free(strain);
 	free(matl);
 	free(mem_int); 
 	free(mem_SDIM);
 	free(mem_XYI);	
-	
 	free(inv);
 	free(solutionVec);
 	free(dataToSend);
-	
 	free(forceStruct.buffer);
-	printf("free(stress);\n");
-free(stress);
-printf("free(mem_double);\n");
-free(mem_double);
+	free(stress);
+	free(mem_double);
 	
 printf("FEM server shutting down, gogo was: %d\n", gogo);
 	

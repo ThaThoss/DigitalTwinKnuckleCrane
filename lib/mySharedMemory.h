@@ -26,9 +26,9 @@ typedef struct {
    double angularVel[3] = {0};
    double angularAcc[3] = {0};
    double massTimesAccAndMom[21] = {0};
-   int axisOfRotation[4] = {0,3,2,2};
+   int axisOfRotation[4] = {0};
    double gravityDir[12] = {0};
-   double loadOnOuter = 1000;
+   double loadOnOuter = 0.0;
    double momentZforFEM[3] = {0};
    double appliedForceForFEM[3][4] = {0};
    double R1[9] = {0};
@@ -49,7 +49,7 @@ typedef struct {
    double femSylinderPrePos[3][2] = {0};
  //  double femLoadPoint1[3][2] = {0};
  //  double femLoadPoint2[3][2] = {0};
-   int femNumPointLoads[3] = {2,2,1};
+   int femNumPointLoads[3] = {0};
 
 
    int deformationScale[3] = {0};
