@@ -68,16 +68,7 @@ printf("Receive Force\n");
 	
 	check = ReceiveNDoubles(sockfd, forceStruct.forces,
 							bc.num_force[0]*ndof*sizeof(double));
-/*				
-	for(i=0;i<bc.num_force[0];i++){
-		check += ReceiveInt32(sockfd, &bc.force[forceNodeNumber]);
-		check += ReceiveNDoubles(sockfd,force+ndof*bc.force[forceNodeNumber],
-					ndof*sizeof(double));
-//printf("InitialForce[%d] = [%lf, %lf] \n",bc.force[forceNodeNumber],*(force+ndof*bc.force[forceNodeNumber]),*(force+ndof*bc.force[forceNodeNumber]+1 ));
-		forceNodeNumber++;
 
-	}
-*/
 	if(check){
 		printf("problems with receiving forces in qdServerReceiver");
 		return 1;

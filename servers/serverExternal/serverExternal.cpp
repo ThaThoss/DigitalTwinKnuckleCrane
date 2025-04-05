@@ -129,7 +129,7 @@ int main(int argc, char *argv[]){
 sem_wait(&(shmStru->semLock));
     int numFEMBodies = shmStru->numFEMBodies;
     int numForce[numFEMBodies] = {0};
-    bytesForPointer[0] = shmStru->numBytesBefFEM;//5*sizeof(int)*3 set in main server
+    bytesForPointer[0] = shmStru->numBytesBefFEM;//8*sizeof(int)*3 set in main server
 sem_post(&(shmStru->semLock));
 
     cout << "Waiting for femDataReady" << endl;
@@ -147,7 +147,7 @@ sem_post(&(shmStru->semLock));
     memcpy(numForce,shmStru->numForce,sizeof(double)*numFEMBodies);
     sem_post(&(shmStru->semLock));
 
-    int headers[numFEMBodies][5] = {0};
+    int headers[numFEMBodies][8] = {0};
     getFEMHeaders(headers, shmStru, numFEMBodies);
 
     /*
@@ -161,12 +161,12 @@ sem_post(&(shmStru->semLock));
     MESHDATA meshdata[3];
     for(int i=0;i<numFEMBodies;i++){
         int memCounter = 0;
-        memcpy(meshdata[i].header,headers[i],sizeof(int)*5);
+        memcpy(meshdata[i].header,headers[i],sizeof(int)*8);
         meshdata[i].bodyNumber = i;
         meshdata[i].numForce = numForce[i];
 
-        // 4*ints for elements, 5* double for nodes, deformation, vonMieses, and forcenodes(ints) and force group (ints)
-        meshdata[i].numBytes = meshdata->header[0]*sizeof(int)*4 + meshdata[i].header[1]*sizeof(double)*5 + numForce[i]*sizeof(int)*2;
+        // 4*ints for elements, 5* double for nodes, deformation, vonMieses, and forcenodes(ints) and force group (ints),
+        meshdata[i].numBytes = meshdata->header[0]*sizeof(int)*4 + meshdata[i].header[1]*sizeof(double)*5+ numForce[i]*sizeof(int)*2;
         //cout << "meshdata["<<i<<"].numBytes = " << meshdata[i].numBytes << endl;
 
         meshdata[i].data = (char*)calloc(meshdata->numBytes,sizeof(char));

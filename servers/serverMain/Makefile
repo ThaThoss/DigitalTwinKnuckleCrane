@@ -3,7 +3,7 @@ CXXFLAGS = -Wall
 INCLUDEPATH = -I./../lib
 DEPS = ./../../lib/mySharedMemory.h ./../../lib/myPortsAndIP.h
 LIBS = -lm -lpthread
-OBJ = ./server.o ./../../lib/sendReceive.o ./../../lib/mySharedMemory.o 
+OBJ = ./server.o ./../../lib/sendReceive.o ./../../lib/mySharedMemory.o ./../../lib/commonDataSizes.o
 TARGET =  ./../server.out
 
 ${TARGET}: ${OBJ} ${DEPS}

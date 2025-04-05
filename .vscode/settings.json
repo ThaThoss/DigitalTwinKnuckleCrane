@@ -95,7 +95,10 @@
         "numbers": "cpp",
         "semaphore": "cpp",
         "cinttypes": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "bitset": "cpp",
+        "regex": "cpp",
+        "server.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

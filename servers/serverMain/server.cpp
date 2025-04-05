@@ -28,7 +28,7 @@ int main(int argc, char *argv[]){
     int nFEMBodies = 3;
     int nBodies[2] = {0};
 
-    cout <<"--argv in Server was: "<< argv[1] << endl;
+    cout <<"Client connected, responding 200" << endl;
 
     int clientSoc = atoi(argv[1]);
     write(clientSoc,"200",sizeof("200"));
@@ -36,16 +36,28 @@ int main(int argc, char *argv[]){
     //read num bodies, [RBD, FEM]
     sleep(1);
     ReceiveNInts(clientSoc,nBodies,sizeof(nBodies));
+    cout <<"Recieved number of bodies, RBD: " <<nBodies[0]<<", fem: " << nBodies[1] << endl;
 
+    //recieve FEM data
+    int headersNew[nBodies[1]*8] = {0};
 
+    sleep(2);
+    cout << "Recieving headers"<< endl;fflush(stdout);
+    if(ReceiveNInts(clientSoc,headersNew,3*8*sizeof(int))){
+        cout << "someting wrong with Recieve Headers" << endl;
+        return 1; 
+    };
 
-
-
+    for(int i=0; i<nBodies[1];i++){
+        cout <<"HeadersNew["<<i<<"], numEl = "<<headersNew[i*8 +0]<<", numNodPnt = "<<headersNew[i*8 +1]<<", numMat = "<<headersNew[i*8 +2]<<", Flag = "<<headersNew[i*8 +3]<<", gravity = "<<headersNew[i*8 +4]<< endl;
+        cout << "numFIxX "<<headersNew[i*8 +5]<<" numFixY "<<headersNew[i*8+6] << " numFOrce " << headersNew[i*8+7]<<endl;
+        fflush(stdout);
+    }
 
 
     //numel numnp nmat plane_stress_flag, gravity_flag
     //196 	250   1   1   1 // dog file;
-    int headers[nFEMBodies][5] = {{2460, 2566,   1,   1,   1},{2220, 2397,   1,   1,   1},{1328, 1468,   1,   1,   1}};
+    int headers[nFEMBodies][8] = {{2460, 2566,   1,   1,   1, 41, 41, 7},{2220, 2397,   1,   1,   1, 42, 42, 40 },{1328, 1468,   1,   1,   1, 36, 36, 25}};
     int deformationScale[3] = {200,3,30};
     int bodyScale[3] = {1,2,2};
     double femZeroPoint[3][2] = {{0,0},{0.2,0.5},{2.07,1.1}};//Where the previous body is attached, used in serverexternal for positioning the fem bodies
@@ -58,10 +70,10 @@ int main(int argc, char *argv[]){
 
     int numBytesForSharedMemory = 0;
     numBytesForSharedMemory += sizeof(sharedMemoryStructForIntegration);//Size of known sizes in struct
-    numBytesForSharedMemory += sizeof(int)*5*nFEMBodies;// header for FEM files, 5 ints each;
+    numBytesForSharedMemory += sizeof(int)*8*nFEMBodies;// header for FEM files, 8 ints each;
 
     for(int i=0;i<nFEMBodies;i++){
-        numBytesForSharedMemory += calcBytesNeededForFEM( headers[i][0],  headers[i][1],  headers[i][2],  headers[i][3],  headers[i][4]);
+        numBytesForSharedMemory += calcBytesNeededForFEM( headersNew[i*8 + 0],  headersNew[i*8 + 1],  headersNew[i*8 + 2],  headersNew[i*8 + 3],  headersNew[i*8 + 4]);
     }
 
 
@@ -72,7 +84,7 @@ int main(int argc, char *argv[]){
 
     // shmget returns an identifier in shmid
     int shmid = shmget(key,numBytesForSharedMemory,0644|IPC_CREAT);
-    cout<<"keyDT = " << key << " and size of = "<< sizeof(sharedMemoryStructForIntegration) << "numBytesForSharedMemory : " << numBytesForSharedMemory << endl;
+    cout<<"keyDT = " << key << ", numBytesForSharedMemory : " << numBytesForSharedMemory << endl;
     if (shmid == -1) {
       perror("Shared memory shmget");
       return 1;
@@ -96,6 +108,7 @@ int main(int argc, char *argv[]){
         shmStru->gogo = 1;
         shmStru->loadOnOuter = 10000.0;
         shmStru->numBytesForAngles = 96;
+        shmStru->femDataReady = 0;
         memcpy(shmStru->angles,zerosForShm,SZ_DOUBLE*3);
         memcpy(shmStru->globalPosPoint,zerosForShm,SZ_DOUBLE*3);
         memcpy(shmStru->dataForKnuckle,zerosForShm,SZ_DOUBLE*3);
@@ -107,17 +120,18 @@ int main(int argc, char *argv[]){
         int femNumPointLoads[3] = {2,2,1};
 
         for(int i=0; i<nFEMBodies;i++){
-            memcpy(shmStru->sharedFEMData + numBytesToJump,headers[i],5*sizeof(int));  
+            memcpy(shmStru->sharedFEMData + numBytesToJump,(headersNew +i*8),8*sizeof(int));  
             memcpy(shmStru->femZeroPoint[i],femZeroPoint[i], sizeofDouble*2); 
             memcpy(shmStru->femCmPoint[i],  femCmPoint[i],   sizeofDouble*2);  
             memcpy(shmStru->femJointPos[i], femJointPos[i], sizeofDouble*2);   
             memcpy(shmStru->femSylindertPos[i], femSylindertPos[i], sizeofDouble*2); 
             memcpy(shmStru->femSylinderPrePos[i], femSylinderPrePos[i], sizeofDouble*2); 
-            numBytesToJump += sizeof(int)*5;
+            numBytesToJump += sizeof(int)*8;
             shmStru->deformationScale[i] = deformationScale[i];
             shmStru->angles[i] = angles[i];
             shmStru->femBodyScale[i] = bodyScale[i];
             shmStru->femNumPointLoads[i] = femNumPointLoads[i];
+            shmStru->numForce[i] = headersNew[i*8 + 7];
            
     
         }
@@ -126,8 +140,25 @@ int main(int argc, char *argv[]){
         }
 
         shmStru->numBytesBefFEM = numBytesToJump;
-       
-        
+
+        int numBytesForFEMBodie[nBodies[1]+1] = {0};
+        int bytesForPointer[nBodies[1]+1] = {0};
+        bytesForPointer[0] = sizeof(int)*8*nFEMBodies;
+
+
+        for(int i=0;i<nBodies[1];i++){
+            cout << "recieving body: "<< i+1 << ", out of: "<< nBodies[1]<<endl;
+            numBytesForFEMBodie[i+1] = calcFemNumBytesFromClient( headers[i]);
+            cout << "numBytesToRecieve: " << numBytesForFEMBodie[i+1] << endl;
+            bytesForPointer[i+1] = bytesForPointer[i] + calcBytesNeededForFEM( headers[i][0],  headers[i][1],  headers[i][2],  headers[i][3],  headers[i][4]);
+            ReceiveNChars(clientSoc,(shmStru->sharedFEMData + bytesForPointer[i]), numBytesForFEMBodie[i+1]);
+            printShrdFemData(shmStru, bytesForPointer[i], i);
+
+        }      
+        cout << "done recieving mesh" <<endl;
+
+
+
     sem_post(&(shmStru->semLock));
     std::cout << "gogo in server: "<< shmStru->gogo << std::endl;
 

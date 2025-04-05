@@ -115,14 +115,16 @@ int ReceiveNInts(int sockfd, int *Integers, int size){
 			error("Error in ReceiveIntArray\n");
 		}else if(rc==0){
 			printf("prematurely broke reciveloop\n");
+			return 1;
 			break;
 		}else{
 			data += rc;
 			left -= rc;
 			recieved += rc;
+			printf("got %d bytes",rc);
 		}
 	}while(left>0);
-	//printf("recieveNInts got %d bytes\n",recieved);
+	printf("recieveNInts got %d bytes\n",recieved);
 	return 0;
 }
 
@@ -271,6 +273,7 @@ int SendNInts(int sockfd, int *IntsToSend, int size){
 	char buffer[6];
 	rc = read(sockfd, buffer,5);
 	check = strncmp(buffer,"ready",5);
+	
 	if(check ==0){
 	do{
 		rc = write(sockfd, data, left);

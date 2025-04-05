@@ -73,9 +73,11 @@ int ReceiveNChars(int sockfd, char* dataToReceive, int numChars){
 
 	int left = sizeof(char)*numChars;
 	int rc;
+	int recieved = 0;
 	char* data = dataToReceive;
 	do{
 		rc = read(sockfd, data, left);
+		recieved += rc;
 		if(rc<0){
 			if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
 				char msg[] = "Something wrong with read";	
@@ -89,6 +91,7 @@ int ReceiveNChars(int sockfd, char* dataToReceive, int numChars){
 			left -= rc;
 		}
 	}while(left>0);
+	printf("recieved %d bytes\n",recieved);
 	return 0;
 }
 
@@ -324,9 +327,11 @@ int SendSeveralInt16(int sockfd, int16_t *intToSend,int numbOfInts){
 int SendNChar(int sockfd, char* charToSend, int numbOfChars ){
 
 	int left = numbOfChars*sizeof(char);
+	int sent = 0;
 	int rc;
 	do{
 		rc = write(sockfd, charToSend, left);
+		sent += rc;
 		if(rc<0){
 			printf("something wrong with SendNUnsignedChar");
 			return -1;
@@ -335,6 +340,7 @@ int SendNChar(int sockfd, char* charToSend, int numbOfChars ){
 			left -= rc;
 		}
 	}while(left > 0);
+	printf("sent %d bytes\n", sent);
 	return 0;
 }
 
@@ -348,6 +354,7 @@ int SendNInts(int sockfd, int *IntsToSend, int size){
 	char buffer[6];
 	rc = read(sockfd, buffer,5);
 	check = strncmp(buffer,"ready",5);
+	printf("SendNInts got %s, from server\n",buffer);
 	if(check ==0){
 	do{
 		rc = write(sockfd, data, left);

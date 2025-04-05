@@ -5,14 +5,6 @@
 #include <math.h>
 #include <linux/joystick.h>
 #include <iostream>
-#include <filesystem>
-#include <vector>
-#include <regex>
-#include <string>
-#include <algorithm>
-#include <signal.h>
-
-#include "../lib/femClient.h"
 
 #include "./../lib/sendReceive.h"
 #include "./../lib/commonDataSizes.h"
@@ -22,57 +14,25 @@
 #define PORT "8085"
 #define IP "127.0.0.1"
 
-volatile sig_atomic_t gogo = 1;
-void handle_sigint(int sig) {
-    gogo = 0;
-    printf("\nSIGINT caught, shutting down gracefully... from femServer\n");
-}
-
 int main(int argc, char* argv[]){
 
-    struct sigaction sa;
-    sa.sa_handler = handle_sigint;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0; 
-    sigaction(SIGINT, &sa, NULL);
-
-    int numFEMfiles = 0;
-    std::string path = "../meshFiles/";
-    std::string filenameRegex = R"(femMesh(\d+)_([A-Za-z0-9_]+)\.dat)";
-
-    std::vector<FEMFILE> files = findFemFiles(path, filenameRegex);
-
-    for (const auto& file : files) {
-        std::cout << "Mesh " << file.meshNumber << " (" << file.partName << "): "
-                  << file.filename << "\n";
-        numFEMfiles++;
-    }
-
-    FEMDATATOSEND initialDataToSend[numFEMfiles];
-    int counter = 0;
-    for(const auto& file : files){
-        std::cout << "Reading mesh from: " << file.filename << std::endl;
-        femReadMesh(&initialDataToSend[counter], file.filename.c_str());
-        counter++;
-
-    }
-    if(numFEMfiles==0){
-        std::cout << "Something wrong with file readers, exiting"<<std::endl;
-        return 1;
-    }
-    std::cout << "Done reading filesm ,num fem files was" <<numFEMfiles<< std::endl;
-
+/*
+    if(argc<2){
+		printf("Please input the ip adress\n");
+	       return 1;
+	}	       
+*/
 	int sockfd, check, portnum;
 	int16_t angle[4] = {0};
-    //bool gogo = true;
+    bool gogo = true;
 	portnum = atoi(PORT);
-	
+	printf("Attempting to connect...?\n");
     char ip[] = IP;
     std::cout << "ip = " << ip << " end port = " << portnum << std::endl;
     char buffer[255];
     int numCharsToSend = knuckleNBytesToKnu;
     // [r ,th1, th2] + gogo + moveCrane
-    unsigned char *dataToSend = (unsigned char*)calloc(numCharsToSend,sizeof(char));
+    unsigned char *dataToSend = (unsigned char*)malloc(numCharsToSend);
     double *rates = (double *)dataToSend;
     int16_t *gogoSignal = (int16_t *)(dataToSend + SZ_DOUBLE*3);
     int16_t *moveCraneSignal = (int16_t *)(dataToSend + SZ_DOUBLE*3 + SZ_INT16);
@@ -89,8 +49,9 @@ int main(int argc, char* argv[]){
     myLinearMapping th2Map(-32768,32767,0.0,M_PI/2.0);
 
 
+    device = "/dev/input/js0";
 
-    printf("Attempting to connect.\n");
+
     sockfd = connectToServer(portnum, ip); 
 	if(sockfd == -1){
 		printf("Error in connecting to server");
@@ -108,52 +69,20 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
     //sleep(2);  // 2,000,000 microseconds (2 sec)
-    printf("Sending Bodies\n");fflush(stdout);
+    printf("Sending Bodies");
     int bodies[2] = {4,3};
-    if(SendNInts(sockfd,bodies,sizeof(int)*2)){
-		std::cout << "Error in SendNInts for bodies in clientControll" << std::endl;
+    if(SendNInts(sockfd,bodies,sizeof(bodies))){
+		std::cout << "Error in SendInt32 in getFeedbackFromTwin" << std::endl;
 		return 1;	
 	}
-  
-
-    int headersToSend[numFEMfiles*8] = {0};
-    for(int i=0;i<numFEMfiles; i++){
-        headersToSend[i*8 + 0] = initialDataToSend[i].numEl;
-        headersToSend[i*8 + 1] = initialDataToSend[i].numNodPnt;
-        headersToSend[i*8 + 2] = initialDataToSend[i].numMaterial;
-        headersToSend[i*8 + 3] = initialDataToSend[i].PlaneStressFlag;
-        headersToSend[i*8 + 4] = initialDataToSend[i].gravity_Flag;
-        headersToSend[i*8 + 5] = initialDataToSend[i].numFixx;
-        headersToSend[i*8 + 6] = initialDataToSend[i].numFixy;
-        headersToSend[i*8 + 7] = initialDataToSend[i].numForce;
-        printf("Body %d: numEl %d, numNod %d, mat: %d, flag: %d, grav: %d, fixX %d, fixY %d, and nForce %d\n",i,initialDataToSend[i].numEl,initialDataToSend[i].numNodPnt, initialDataToSend[i].numMaterial, initialDataToSend[i].PlaneStressFlag, initialDataToSend[i].gravity_Flag, initialDataToSend[i].numFixx,initialDataToSend[i].numFixy,initialDataToSend[i].numForce);
-    }
-    printf("Sending Headers\n");fflush(stdout);   
-    if(SendNInts(sockfd,headersToSend,sizeof(int)*8*3)){
-		std::cout << "Error in SendNInts for headers in clientControll" << std::endl;
-		return 1;	
-	}
-    sleep(10);
-    
-    for(int i=0;i<numFEMfiles; i++){
-        printf("Sending Mesh %d\n",i);fflush(stdout); 
-        printElements(&initialDataToSend[i], i);
-
-        int numBytes= initialDataToSend[i].sizeOfMemDoubles*sizeof(double) + initialDataToSend[i].sizeOfMemIntegers*sizeof(int);
-        SendNChar(sockfd,initialDataToSend[i].allTheData,numBytes);
-        sleep(10);
-
-    }
-
     printf("Waiting for gogo");
     read(sockfd,buffer,255);
-	printf("Server recieved data and ready, ansver was %s\n",buffer);
+	printf("Server ready, ansver was %s\n",buffer);
 	check = strncmp(buffer,"gogo",4);
 	if(check){
 		printf("\nServer error with code %s\n",buffer);
 		return -1;
 	}
-    device = "/dev/input/js0";
 
     while(gogo){
 
@@ -237,9 +166,6 @@ int main(int argc, char* argv[]){
     printf("Shutdown sent\n");
     printf("Radius was %f, theta %f and phi %f\n",rates[0],rates[1],rates[2]);
     printf("gogo was %d, moveCrane %d \n\n",*gogoSignal,*moveCraneSignal);
-    for(int i=0; i<numFEMfiles;i++){
-        freeDataToSend(&initialDataToSend[i]);
-    }
     close(js);
     close(sockfd);
     return 0;

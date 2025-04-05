@@ -65,12 +65,12 @@ int main(int argc, char *argv[]){
         int nRBDBodies = shmStru->numRBDbodies;
     sem_post(&(shmStru->semLock));
 
-    int headers[nFEMBodies][5] = {0};
+    int headers[nFEMBodies][8] = {0};
     getFEMHeaders( headers, shmStru,  nFEMBodies);
 
-    cout << "nFEMBodies = "<< nFEMBodies << endl;
+    cout << "nFEMBodies Internal = "<< nFEMBodies << endl;
     for(int i=0;i<nFEMBodies;i++){
-        for(int j=0;j<5;j++){
+        for(int j=0;j<8;j++){
             cout << headers[i][j] << " , ";
         }cout << endl;
     }
@@ -81,7 +81,7 @@ int main(int argc, char *argv[]){
     cout << "XBoxController Client connected" << endl;
    
     int bytesForPointer[4] = {0};
-    bytesForPointer[0] = sizeof(int)*5*nFEMBodies;
+    bytesForPointer[0] = sizeof(int)*8*nFEMBodies;
     thread *commThreadFEM[nFEMBodies];
 
     sem_t semSyncWait;  // Synchronization semaphore

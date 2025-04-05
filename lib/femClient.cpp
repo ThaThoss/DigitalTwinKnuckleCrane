@@ -1,7 +1,95 @@
 
 #include "femClient.h"
 #include <stdio.h>
+#include <iostream>
+#include <filesystem>
+#include <vector>
+#include <regex>
+#include <string>
+#include <algorithm>
 
+std::vector<FEMFILE> findFemFiles(const std::string& folderPath, const std::string& patternStr) {
+	namespace fs = std::filesystem;
+
+    std::vector<FEMFILE> femFiles;
+    std::regex pattern(patternStr);
+
+    try {
+        for (const auto& entry : fs::directory_iterator(folderPath)) {
+            if (entry.is_regular_file()) {
+                std::string filename = entry.path().filename().string();
+                std::smatch match;
+                if (std::regex_match(filename, match, pattern)) {
+                    int number = std::stoi(match[1]);
+                    std::string part = match[2];
+                    femFiles.push_back({number, part, folderPath+filename});
+                }
+            }
+        }
+
+        // Sort by mesh number
+        std::sort(femFiles.begin(), femFiles.end(),
+            [](const FEMFILE& a, const FEMFILE& b) {
+                return a.meshNumber < b.meshNumber;
+            });
+
+    } catch (const std::exception& e) {
+        std::cerr << "Error scanning FEM files: " << e.what() << "\n";
+    }
+
+    return femFiles;
+}
+
+int femReadMesh(FEMDATATOSEND *dataToSend, const char fileName[]){
+	using namespace std;
+	
+	int check = 0;
+	FILE *femDatFile = {0};
+	femDatFile = fopen(fileName,"r");
+	if(femDatFile == NULL){
+		printf("Can't find file %30s, in femClient/femReadMesh\n",fileName);
+		exit(1);
+	}
+
+	check = qdInitialReader(dataToSend,femDatFile);
+	cout << "numEl "<<dataToSend->numEl<<" numNodPnt "<<dataToSend->numNodPnt<<" numMaterial "<<dataToSend->numMaterial<<" PlaneStressFlag "<<dataToSend->PlaneStressFlag<<" gravity_Flag "<<dataToSend->gravity_Flag<<endl;
+	
+	int numBytes = calcFemDataSize(dataToSend);
+
+	check = qdClientMemory(dataToSend);
+
+	check = qdClientDistributePointers(dataToSend);
+
+	check = qdClientReader(dataToSend, femDatFile);
+
+	fclose(femDatFile);
+
+	return 0;
+}
+
+int calcFemDataSize(FEMDATATOSEND *dataToSend){
+
+	printf("Calculating sizes\n");
+	dataToSend->degOfFreedom = dataToSend->numNodPnt*numDegOfFreedom;
+	/* Size of memory needed for the doubles */
+	int dubSizeForce = dataToSend->degOfFreedom;
+	int dubSizeCoord = dataToSend->numNodPnt*numSpatialDim;
+	int dubSizeMatProp = 3*dataToSend->numMaterial;
+	int dubSizeDisplacedNodes = 2*dataToSend->numNodPnt + 2;
+	dataToSend->sizeOfMemDoubles = dubSizeForce + 
+			dubSizeCoord + dubSizeDisplacedNodes +dubSizeMatProp;
+
+	/* Size of memory needed for the integers */
+	int intSizeConnect = dataToSend->numEl*nodesPerElement;
+	int intSizeElementalMaterial = dataToSend->numEl;
+	int intSizeFixedNodes = 2*dataToSend->numNodPnt+2;
+	int intSizePreForce = dataToSend->numNodPnt*2+1; // *2 for group number----------------------------------------	
+	dataToSend->sizeOfMemIntegers = intSizeConnect+intSizeElementalMaterial + 
+				       intSizeFixedNodes+intSizePreForce;
+
+	return dataToSend->sizeOfMemIntegers + dataToSend->sizeOfMemDoubles;
+
+}
 
 
 int qdInitialReader(FEMDATATOSEND *dataToSend, FILE *femDatFile){
@@ -23,20 +111,19 @@ return 0;
 
 int qdClientMemory(FEMDATATOSEND *dataToSend){
 
-/* Doubles */
-	dataToSend->doubles.allTheDoubles = (double *)calloc(dataToSend->sizeOfMemDoubles,sizeof(double));
-	if(!(dataToSend->doubles.allTheDoubles)){
+	int numBytes= dataToSend->sizeOfMemDoubles*sizeof(double) + dataToSend->sizeOfMemIntegers*sizeof(int);
+	dataToSend->allTheData = (char *)calloc(numBytes,sizeof(char));
+	if(!(dataToSend->allTheData)){
 		printf("Failed to allocate memory for the doubles");
 		exit(1);
 	}
-/* Integers */
-	dataToSend->integers.allTheInts = (int *)calloc(dataToSend->sizeOfMemIntegers,sizeof(int));
-	
-	if(!(dataToSend->integers.allTheInts)){
-		printf("Failed to allocate memory for the ints");
-		exit(1);
-	}
 
+/* Doubles */
+	dataToSend->doubles.allTheDoubles = (double *)dataToSend->allTheData;
+
+/* Integers */
+	dataToSend->integers.allTheInts = (int *)(dataToSend->allTheData + dataToSend->sizeOfMemDoubles*sizeof(double));
+	
 return 0;
 }
 /*----------------------------------------------------*/
@@ -94,13 +181,13 @@ int qdClientReader(FEMDATATOSEND *dataToSend,FILE *femDatFile){
 	char buffer[BUFSIZ];
 	int i,j, matNum, elNum, nodeNum, counter;
 	
-	printf("Reading femqd file\n");
-	printf("Number of Elements: %d, nodes: %d, materials: %d, degree of freedom: %d\n",
-			dataToSend->numEl,dataToSend->numNodPnt, 
-			dataToSend->numMaterial, dataToSend->degOfFreedom);
+	//printf("Reading femqd file\n");
+	//printf("Number of Elements: %d, nodes: %d, materials: %d, degree of freedom: %d\n",
+	//		dataToSend->numEl,dataToSend->numNodPnt, 
+	//		dataToSend->numMaterial, dataToSend->degOfFreedom);
 
-	printf("Plane theory flag: %d\n\n",dataToSend->PlaneStressFlag);
-	printf("Gravity flag: %d\n\n",dataToSend->gravity_Flag);
+	//printf("Plane theory flag: %d\n\n",dataToSend->PlaneStressFlag);
+	//printf("Gravity flag: %d\n\n",dataToSend->gravity_Flag);
 /*Pull out the header text*/
        fgets( buffer, BUFSIZ, femDatFile);
 
@@ -108,13 +195,13 @@ int qdClientReader(FEMDATATOSEND *dataToSend,FILE *femDatFile){
 
 	for(i = 0; i<dataToSend->numMaterial; i++){
 	 fscanf(femDatFile,"%d\n", &matNum );	
-	// printf("Material (%d) Emod, nu, density\n",matNum);
+	 //printf("Material (%d) Emod, nu, density\n",matNum);
 	 fscanf(femDatFile," %lf %lf %lf\n",(dataToSend->doubles.materialProperties+3*matNum),
 			 (dataToSend->doubles.materialProperties+3*matNum+1),
 			 (dataToSend->doubles.materialProperties+3*matNum+2));
-	/* printf(" %9.4f %9.4f %9.4f\n",*(dataToSend->doubles.materialProperties+3*matNum),
-			 *(dataToSend->doubles.materialProperties+3*matNum+1),
-			 *(dataToSend->doubles.materialProperties+3*matNum+2));*/
+	 //printf(" %9.4f %9.4f %9.4f\n",*(dataToSend->doubles.materialProperties+3*matNum),
+	//		 *(dataToSend->doubles.materialProperties+3*matNum+1),
+	//		 *(dataToSend->doubles.materialProperties+3*matNum+2));
 	}
 	fgets(buffer,BUFSIZ,femDatFile);
 	//printf("\n");
@@ -128,16 +215,16 @@ int qdClientReader(FEMDATATOSEND *dataToSend,FILE *femDatFile){
  */
 for( i = 0; i < dataToSend->numEl; i++ ) {
 	   fscanf( femDatFile, "%d", &elNum );
-	  // printf( "connectivity for element (%4d) ", elNum);
+	   //printf( "connectivity for element (%4d) ", elNum);
 	   for( j = 0; j < nodesPerElement; j++ ) {
 		   fscanf( femDatFile, "%d", (dataToSend->integers.connect+nodesPerElement*elNum+j));
 		   //printf( "%4d ", *(dataToSend->integers.connect+nodesPerElement*elNum+j));
 	   }
 	   fscanf( femDatFile, "%d\n", (dataToSend->integers.el_matl+elNum));
-	  // printf( " with matl %3d\n", *(dataToSend->integers.el_matl+elNum));
+	   //printf( " with matl %3d\n", *(dataToSend->integers.el_matl+elNum));
 	} 
         fgets( buffer, BUFSIZ, femDatFile );
-      //  printf( "\n" );	
+        //printf( "\n" );	
 
 /* Pull out node coordinate info and echo to screen                     */
 /*    1) coord contains the x, y coordinates of a node                  */  
@@ -145,7 +232,7 @@ for( i = 0; i < dataToSend->numEl; i++ ) {
 	for( i = 0; i < dataToSend->numNodPnt; i++ ) {
            fscanf( femDatFile, "%d", &nodeNum);
          //  printf( "Node (%d) ", nodeNum);
-	   //printf( "coordinates ");
+	  // printf( "coordinates ");
 	   for( j = 0; j < numSpatialDim; j++ ) {
 		   fscanf( femDatFile, "%lf", (dataToSend->doubles.coord+numSpatialDim*nodeNum+j));
 		  // printf( "%9.4f ", *(dataToSend->doubles.coord+numSpatialDim*nodeNum+j));
@@ -154,7 +241,7 @@ for( i = 0; i < dataToSend->numEl; i++ ) {
           // printf( "\n" );	   
 	}
         fgets( buffer, BUFSIZ, femDatFile );
-      //  printf( "\n" );	
+       // printf( "\n" );	
 
 /* Pull out x-boundary condition info and echo to screen                */
 /*    1) bc.fix.x contains the node numbers where the                   */ 
@@ -165,15 +252,15 @@ for( i = 0; i < dataToSend->numEl; i++ ) {
 /*       x-displacement has been prescribed                             */ 
 	counter = 0;
 	fscanf( femDatFile, "%d",  (dataToSend->integers.fixedNodesX + counter));
-	/*printf( "node (%4d) has an x prescribed displacement of: ", 
-					*dataToSend->integers.fixedNodesX);*/
+	//printf( "node (%4d) has an x prescribed displacement of: ", 
+	//				*dataToSend->integers.fixedNodesX);
 	while( *(dataToSend->integers.fixedNodesX+counter) > -1 ) {
-	//while(counter<11){	
+		
 		fscanf( femDatFile, "%lf\n%d", (dataToSend->doubles.displacedNodesX+counter),
 			       				(dataToSend->integers.fixedNodesX+counter+1));
-	//	printf( "%14.6e\n", *(dataToSend->doubles.displacedNodesX+counter));
-	/*	printf( "node (%4d) has an x prescribed displacement of: ",
-			*(dataToSend->integers.fixedNodesX+counter+1));*/
+		//printf( "%14.6e\n", *(dataToSend->doubles.displacedNodesX+counter));
+		//printf( "node (%4d) has an x prescribed displacement of: ",
+			//*(dataToSend->integers.fixedNodesX+counter+1));
 		counter++;
 	}
         dataToSend->numFixx = counter;
@@ -190,15 +277,15 @@ for( i = 0; i < dataToSend->numEl; i++ ) {
 /*       y-displacement has been prescribed                             */ 
         counter = 0;
 	fscanf( femDatFile, "%d", dataToSend->integers.fixedNodesY+counter );
-	/*printf( "node (%4d) has an y prescribed displacement of: ", 
-				*(dataToSend->integers.fixedNodesY+counter));*/
+	//printf( "node (%4d) has an y prescribed displacement of: ", 
+			//	*(dataToSend->integers.fixedNodesY+counter));
 
 	while( *(dataToSend->integers.fixedNodesY+counter) > -1) {
 		fscanf( femDatFile, "%lf\n%d", (dataToSend->doubles.displacedNodesY+counter),
 			       			dataToSend->integers.fixedNodesY+counter+1);
-	//	printf( "%14.6e\n", *(dataToSend->doubles.displacedNodesY+counter));
-	/*	printf( "node (%4d) has an y prescribed displacement of: ",
-			*(dataToSend->integers.fixedNodesY+counter+1));*/
+		//printf( "%14.6e\n", *(dataToSend->doubles.displacedNodesY+counter));
+		//printf( "node (%4d) has an y prescribed displacement of: ",
+			//*(dataToSend->integers.fixedNodesY+counter+1));
 		counter++;
 	}
         dataToSend->numFixy = counter;
@@ -212,24 +299,24 @@ for( i = 0; i < dataToSend->numEl; i++ ) {
 /*    3) bc.num_force contains the total number of nodes where          */ 
 /*       a force has been prescribed                                    */ 
 	counter = 0;
-	printf( "force vector for node: " );
+	//printf( "force vector for node: " );
 	fscanf( femDatFile, "%d", dataToSend->integers.nodesWithForce);
-	printf( "(%4d)", *(dataToSend->integers.nodesWithForce));
+	//printf( "(%4d)", *(dataToSend->integers.nodesWithForce));
 	while( *(dataToSend->integers.nodesWithForce + counter) > -1 ) {
 		for( j = 0; j < numDegOfFreedom; j++ ) {
 			fscanf( femDatFile, "%lf", (dataToSend->doubles.force+counter*2+j));
-			printf( "%16.4f "  , *(dataToSend->doubles.force+counter*2+j));
+			//printf( "%16.4f "  , *(dataToSend->doubles.force+counter*2+j));
 		}
 			fscanf( femDatFile, "%d", dataToSend->integers.forceGroup+counter); 
-			printf("  %d  \n", *(dataToSend->integers.forceGroup+counter));   
-			//fscanf( femDatFile, "\n");
+			//printf("  %d  \n", *(dataToSend->integers.forceGroup+counter));   
+			fscanf( femDatFile, "\n");
 	
-		printf( "force vector for node: ");
+		//printf( "force vector for node: ");
 		counter++;
 		fscanf( femDatFile, "%d", dataToSend->integers.nodesWithForce + counter);
-		printf( "(%4d)" ,  *(dataToSend->integers.nodesWithForce + counter));
+		//printf( "(%4d)" ,  *(dataToSend->integers.nodesWithForce + counter));
 	}
-	printf( "\n" );
+	//printf( "\n" );
 
 	dataToSend->numForce = counter;
 	fscanf( femDatFile, "\n" );
@@ -282,16 +369,7 @@ int qdClientSender(FEMDATATOSEND *dataToSend, int sockfd){
 
 	//Send the forces
 	check += SendNDoubles( sockfd, dataToSend->doubles.force, dataToSend->numForce*numDegOfFreedom*sizeof(double));
-/*
-	for(i=0;i<dataToSend->numForce;i++){
-		check += SendInt32(sockfd,*(dataToSend->integers.nodesWithForce+i));
-		check += SendNDoubles(sockfd,dataToSend->doubles.force+i*numDegOfFreedom,
-					numDegOfFreedom*sizeof(double));
-		printf("sent Force[%d] = [%lf, %lf ]\n",*(dataToSend->integers.nodesWithForce+i),
-		*(dataToSend->doubles.force+i*numDegOfFreedom),
-		*(dataToSend->doubles.force+i*numDegOfFreedom+1) );
-		
-	}*/
+
 	if(check){
 		printf("Problem with sending forces in qdClientSender");
 		return 1;
@@ -343,4 +421,22 @@ int qdClientSender(FEMDATATOSEND *dataToSend, int sockfd){
 
 
 return 0;
+}
+
+int freeDataToSend(FEMDATATOSEND *dataToSend){
+
+	free(dataToSend->allTheData);
+	return 0;
+
+}
+
+int printElements(FEMDATATOSEND *dataToSend, int bodyNum){
+
+
+
+	for(int i=0; i<dataToSend->numEl; i++){
+		printf("[%d, %d] = [%d, %d, %d, %d];\n",bodyNum,i,*(dataToSend->integers.connect + i*4 +0),*(dataToSend->integers.connect + i*4 +1),*(dataToSend->integers.connect + i*4 +2),*(dataToSend->integers.connect + i*4 +3));
+	}
+
+	return 0;
 }

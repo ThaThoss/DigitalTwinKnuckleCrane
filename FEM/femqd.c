@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <signal.h>
 #include <math.h>
@@ -49,6 +50,9 @@ int main(int argc, char** argv)
 	int     sofmA, sofmi, sofmf, sofmSTRESS;
 	int     mem_case, counter;
 	int 	sockfd;
+	int numFixX = 0;
+	int numFixY = 0;
+	int numForce = 0;
 
 	double  *mem_double; 
 	double  *coord, *force, *tempForce, *U, *A;	
@@ -77,8 +81,12 @@ int main(int argc, char** argv)
 	numnp = sizes.numnp;
 	plane_stress_flag = sizes.plane_stress_flag;
 	gravity_flag = forceStruct.gravity_flag;
+	numFixX = sizes.num_fix_x;
+	numFixY = sizes.num_fix_y;
+	numForce = sizes.num_force;
+
 	int bodyNum = 0;
-	printf("nmat = %d, numel = %d, numnp = %d, planeFlag = %d, gravityFlg = %d",nmat,numel,numnp,plane_stress_flag,gravity_flag);
+	printf("nmat = %d, numel = %d, numnp = %d, planeFlag = %d, gravityFlg = %d, nFXX = %d, nFXY = %d, nForce = %d\n",nmat,numel,numnp,plane_stress_flag,gravity_flag,numFixX,numFixY,numForce);
 	//add gravity value to initial value reciever
 	// {{2460, 2566,   1,   1,   1},{2220, 2397,   1,   1,   1},{1328, 1468,   1,   1,   1}};
 
@@ -193,6 +201,7 @@ int main(int argc, char** argv)
 	forceStruct.gogo = (int*)(forceStruct.buffer + (bc.num_force[0]*2+ndof)*sizeof(double));
 	*(forceStruct.gogo) = 42;
 
+	sleep(120);
 /* Receive the data from Client */ 
 	check =	qdServerReceiver(bc, connect, coord, el_matl, forceStruct, matl, U, &sizes, sockfd);
 
@@ -206,7 +215,7 @@ for(int i=0;i<sizes.numnp;i++){
 }
 printf("\n\n");
 */
-	
+printf( " Bef  qdformid\n" );
 	check = qdformid( bc, id );
 	if(!check) printf( " Problems with qdformid \n");
 
@@ -285,7 +294,7 @@ printf("Starting qdKassmembleStress\n");
 
 	if(!check) printf( "Problems with qdKassembler \n");
 
-	name[0] = 'd';
+	//name[0] = 'd';
 	//check = qdwriter( bc, connect, coord, el_matl,  id, matl, 
 	//		name, strain, strain_node, stress, stress_node, U, vonMieses);
 	//if(!check) printf( "Problems with qdwriter \n");

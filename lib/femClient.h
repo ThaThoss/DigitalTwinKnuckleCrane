@@ -8,6 +8,11 @@
 #include <string.h>
 #include <stdint.h>
 #include <semaphore.h>
+#include <filesystem>
+#include <vector>
+#include <regex>
+#include <string>
+#include <algorithm>
 
 #include "./sendReceive.h"
 //#include "./../lib/mySharedMemory.h"
@@ -52,18 +57,35 @@ typedef struct {
 	int numMaterial;
 	int PlaneStressFlag;
 	int gravity_Flag;
+	char *allTheData;
 } FEMDATATOSEND;
 
-int qdInitialReader(FEMDATATOSEND *dataToSend, FILE *femDatFile);
+typedef struct {
+    int meshNumber;
+    std::string partName;
+    std::string filename;
+}FEMFILE;
 
+std::vector<FEMFILE> findFemFiles(const std::string& folderPath, const std::string& patternStr);
+
+int femReadMesh(FEMDATATOSEND *dataToSend, const char fileName[]);
+
+int calcFemDataSize(FEMDATATOSEND *dataToSend);
+
+int qdInitialReader(FEMDATATOSEND *dataToSend, FILE *femDatFile);
 
 int qdClientMemory(FEMDATATOSEND *dataToSend);
 
 int qdClientDistributePointers(FEMDATATOSEND *dataToSend);
 
 int qdClientReader(FEMDATATOSEND *dataToSend,FILE *femDatFile);
+
 int qdClientInitialSender(FEMDATATOSEND *dataToSend,int sockfd);
 
 int qdClientSender(FEMDATATOSEND *dataToSend, int sockfd);
+
+int freeDataToSend(FEMDATATOSEND *dataToSend);
+
+int printElements(FEMDATATOSEND *dataToSend, int bodyNum);
 
 #endif

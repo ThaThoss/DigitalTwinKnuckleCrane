@@ -57,36 +57,37 @@ void femComLoop(int femBodyNumber, int bytesForPointer,int shmid, char femIp[16]
 	}
 
 	printf("Attached shared memory from thread %d\n",femBodyNumber);
-	check = qdInitialReader(&dataToSend,femDatFile);
+	//check = qdInitialReader(&dataToSend,femDatFile);
 	
 	 //numel numnp nmat plane_stress_flag, gravity_flag
 	check = getFEMHeader( &dataToSend, shmStru, femBodyNumber);
 
     cout << "numEl "<<dataToSend.numEl<<" numNodPnt "<<dataToSend.numNodPnt<<" numMaterial "<<dataToSend.numMaterial<<" PlaneStressFlag "<<dataToSend.PlaneStressFlag<<" gravity_Flag "<<dataToSend.gravity_Flag<<endl;
-	
+	cout << "numFixX "<< dataToSend.numFixx<<" numFixY "<<dataToSend.numFixy<<" numForce "<< dataToSend.numForce<<endl;
 
-
-	
+	printf("Calculating sizes\n");
+	int numBytes = calcFemDataSize(&dataToSend);
+	/*
 	dataToSend.degOfFreedom = dataToSend.numNodPnt*numDegOfFreedom;
 
 
 
-	printf("Calculating sizes\n");
-	/* Size of memory needed for the doubles */
+	
+	 Size of memory needed for the doubles 
 	dubSizeForce = dataToSend.degOfFreedom;
 	dubSizeCoord = dataToSend.numNodPnt*numSpatialDim;
 	dubSizeMatProp = 3*dataToSend.numMaterial;
 	dubSizeDisplacedNodes = 2*dataToSend.numNodPnt + 2;
 	dataToSend.sizeOfMemDoubles = dubSizeForce + 
-			dubSizeCoord + dubSizeDisplacedNodes +dubSizeMatProp;
+			dubSizeCoord + dubSizeDisplacedNodes +dubSizeMatProp;*/
 
-	/* Size of memory needed for the integers */
+	/* Size of memory needed for the integers 
 	intSizeConnect = dataToSend.numEl*nodesPerElement;
 	intSizeElementalMaterial = dataToSend.numEl;
 	intSizeFixedNodes = 2*dataToSend.numNodPnt+2;
 	intSizePreForce = dataToSend.numNodPnt*2+1; // *2 for group number----------------------------------------	
 	dataToSend.sizeOfMemIntegers = intSizeConnect+intSizeElementalMaterial + 
-				       intSizeFixedNodes+intSizePreForce;
+				       intSizeFixedNodes+intSizePreForce;*/
 
 		
 
@@ -94,13 +95,13 @@ void femComLoop(int femBodyNumber, int bytesForPointer,int shmid, char femIp[16]
 
 	check = qdClientDistributePointers(&dataToSend);
 
-	check = qdClientReader(&dataToSend, femDatFile);
+	//check = qdClientReader(&dataToSend, femDatFile);
 
 
 
 	check = distrubuteFemSharedMemPointers( shmStru, &sharedPointers, femBodyNumber, bytesForPointer );
 	
-	check = saveFemData( shmStru, &dataToSend, &sharedPointers, femBodyNumber, bytesForPointer );
+	check = getFemData( shmStru, &dataToSend, &sharedPointers, femBodyNumber );
 
 
 /*
@@ -155,7 +156,7 @@ sem_post(&(shmStru->semLock));
 	
 
 
-	printf("Done sending mesh:)\n");
+	
 											
 	int bytesToSend = (dataToSend.numForce*2+2)*sizeof(double) + sizeof(int);
 	char* dataBufferForSend = (char*)calloc(bytesToSend,sizeof(char));
@@ -189,6 +190,7 @@ sem_post(&(shmStru->semLock));
 	check = qdClientInitialSender(&dataToSend,sockfd);
 	
 	check = qdClientSender(&dataToSend,sockfd);
+	printf("Done sending mesh:)\n");
 	while(gogo[0]){
 		
 		//printf("-----------Waiting to recieve-------------\n");
@@ -197,7 +199,7 @@ sem_post(&(shmStru->semLock));
 		count++;
         // Signal completion to controll thread
         sem_post(semSyncWait);
-        //printf("Fem loop %d: Finished work, waiting...\n", femBodyNumber);
+        printf("Fem loop %d: Finished work, waiting...\n", femBodyNumber);
 
         // Wait for reset
         sem_wait(semSyncGo);

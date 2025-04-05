@@ -49,12 +49,16 @@ int getFEMHeader(FEMDATATOSEND *dataToSend, sharedMemoryStructForIntegration *sh
 
 	sem_wait(&(shmStruct->semLock));
 		//numel numnp nmat plane_stress_flag, gravity_flag
-		int *femHeader = (int*)(shmStruct->sharedFEMData + sizeof(int)*5*femBodyNumber );
+		int *femHeader = (int*)(shmStruct->sharedFEMData + sizeof(int)*8*femBodyNumber );
 		dataToSend->numEl = femHeader[0];
 		dataToSend->numNodPnt = femHeader[1];
 		dataToSend->numMaterial = femHeader[2];
 		dataToSend->PlaneStressFlag = femHeader[3];
 		dataToSend->gravity_Flag = femHeader[4];
+		dataToSend->numFixx = femHeader[5];
+		dataToSend->numFixy = femHeader[6];
+		dataToSend->numForce = femHeader[7];
+
 	sem_post(&(shmStruct->semLock));
 
 	//std::cout << "Header " << femBodyNumber << " in getFEMHeader (FEM Loop)" <<std::endl;
@@ -63,17 +67,21 @@ int getFEMHeader(FEMDATATOSEND *dataToSend, sharedMemoryStructForIntegration *sh
 
 	return 0;
 }
-int getFEMHeaders(int headers[][5], sharedMemoryStructForIntegration *shmStruct, int nFEMBodies){
+int getFEMHeaders(int headers[][8], sharedMemoryStructForIntegration *shmStruct, int nFEMBodies){
 
 sem_wait(&(shmStruct->semLock));
 for(int i=0;i<nFEMBodies;i++){
 	//numel numnp nmat plane_stress_flag, gravity_flag
-	int *femHeader = (int*)(shmStruct->sharedFEMData + sizeof(int)*5*i );
+	int *femHeader = (int*)(shmStruct->sharedFEMData + sizeof(int)*8*i );
 	headers[i][0] = femHeader[0];//numEl
 	headers[i][1] = femHeader[1];//numNodPnt
 	headers[i][2] = femHeader[2];//numMaterial
 	headers[i][3] = femHeader[3];//PlaneStressFlag
 	headers[i][4] = femHeader[4];//gravity_Flag
+	headers[i][5] = femHeader[5];//numFixedX
+	headers[i][6] = femHeader[6];//numFixedY
+	headers[i][7] = femHeader[7];//numFOrce
+
 	//std::cout << "Header " << i << " in getFEMHeaders" <<std::endl;
     //std::cout << headers[i][0] << " , " << headers[i][1] << " , " << headers[i][2] << " , " << headers[i][3] << " , " << headers[i][4] << std::endl; 
 }
@@ -93,8 +101,8 @@ int distrubuteFemSharedMemPointers(sharedMemoryStructForIntegration *shrdMemStru
 sem_wait(&(shrdMemStruct->semLock));
 
 
-	int sharedMemoryCounter = femBodyNumber*5*sizeof(int);
-	//Headers stored together first, 5 ints * number of FEM bodies.
+	int sharedMemoryCounter = femBodyNumber*8*sizeof(int);
+	//Headers stored together first, 8 ints * number of FEM bodies.
 	//numel numnp nmat plane_stress_flag, gravity_flag
 	sharedPointers->header = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	int numberOfElements = *(sharedPointers->header);
@@ -103,12 +111,31 @@ sem_wait(&(shrdMemStruct->semLock));
 	int plane_stress_flag = *(sharedPointers->header+3);
 	int gravity_flag = *(sharedPointers->header+4);
 
-	//Jump to the start of this bodies data, first is material properties;
+	//Jump to the start of this bodies data, data is ordered with doubles first, then ints. Then solution data
+	//Nodal coordinates
 	sharedMemoryCounter = bytesForPointer;
+	sharedPointers->nodes = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += numNodes*numSpatialDim*sizeofDouble;//nodal points is the second int in header
+
+	//Force vectors:
+	sharedPointers->forceVectors = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += numSpatialDim*(numNodes)*sizeofDouble;
+
+	// Material properties;
 	sharedPointers->mat_E_Poiss_Mass = (double*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter );
 	sharedMemoryCounter += 3*sizeofDouble*numMatProperties;
 
-	//Second part is the elements 
+	// prescribed displacements X
+	sharedPointers->xLockedNodesCoord = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeofDouble;
+
+	// prescribed displacements Y
+	sharedPointers->yLockedNodesCoord = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeofDouble;
+
+	
+	//Second part is the integers
+	//Elements 
 	sharedPointers->elements = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += numberOfElements*nodesPerElement*sizeof(int);//first int in header is number of elements
 
@@ -116,35 +143,21 @@ sem_wait(&(shrdMemStruct->semLock));
 	sharedPointers->elementalMaterialNumber = (int*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += numberOfElements*sizeof(int);//first int in header is number of elements
 
-	//Nodal coordinates
-	sharedPointers->nodes = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += numNodes*numSpatialDim*sizeofDouble;//nodal points is the second int in header
-
-	//prescribed displacement x: 
-  	sharedPointers->xLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes+1)*sizeof(int);
-
-   	sharedPointers->xLockedNodesCoord = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes+1)*sizeofDouble;
-
-	//prescribed displacement y: 
-  	sharedPointers->yLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes+1)*sizeof(int);
-
-   	sharedPointers->yLockedNodesCoord = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes+1)*sizeofDouble;
-
 	//Nodes with force: 
-  	sharedPointers->forceNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedPointers->forceNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += (numNodes+1)*sizeof(int);
 
 	//Force nodes group number:
 	sharedPointers->forceGroup = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += (numNodes)*sizeof(int);
 
-	//Force vectors:
-   	sharedPointers->forceVectors = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes+1)*sizeofDouble;
+	//prescribed displacement x: 
+  	sharedPointers->xLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeof(int);
+
+	//prescribed displacement y: 
+  	sharedPointers->yLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeof(int);
 
 	//Resulting Nodal coordinates, deformed mesh
 	sharedPointers->deformedNodes = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
@@ -199,7 +212,7 @@ sem_wait(&(shrdMemStruct->semLock));
 	memcpy(sharedPointers->forceGroup,femData->integers.forceGroup,femData->numForce*sizeof(int));
 
 	//2 doubles per node
-	memcpy(sharedPointers->forceVectors,femData->doubles.force,femData->numForce*2*sizeofDouble);
+	memcpy(sharedPointers->forceVectors,femData->doubles.force,femData->numForce*numSpatialDim*sizeofDouble);
 
 	memset(sharedPointers->deformedNodes, 0, numNodes*numSpatialDim*sizeofDouble);
 	memset(sharedPointers->vonMieses, 0, numNodes*sizeofDouble );
@@ -208,6 +221,62 @@ sem_post(&(shrdMemStruct->semLock));
 
 	return 0;
 }
+
+int getFemData(sharedMemoryStructForIntegration *shrdMemStruct,FEMDATATOSEND *femData,sharedMemoryPointers *sharedPointers, int femBodyNumber ){
+
+	sem_wait(&(shrdMemStruct->semLock));
+	
+		int numberOfElements = *(sharedPointers->header);
+		int numNodes = *(sharedPointers->header+1);
+		int numMatProperties = *(sharedPointers->header+2);
+		int plane_stress_flag = *(sharedPointers->header+3);
+		int gravity_flag = *(sharedPointers->header+4);
+	
+		femData->numForce = shrdMemStruct->numForce[femBodyNumber];
+	
+		//Copy in all aterial properties, 3 dubles per material
+		memcpy(femData->doubles.materialProperties, sharedPointers->mat_E_Poiss_Mass, 3*sizeofDouble*numMatProperties);
+	
+		//Copy elements over,4 ints per element
+		memcpy(femData->integers.connect, sharedPointers->elements, numberOfElements*nodesPerElement*sizeof(int));
+		printf("\n\nElements in get FemData from femBody %d\n\n", femBodyNumber);
+		for(int i=0;i<numberOfElements;i++){
+			printf("[%d, %d] = [%d, %d, %d, %d];\n",femBodyNumber,i,*(femData->integers.connect + i*4 +0),*(femData->integers.connect + i*4 +1),*(femData->integers.connect + i*4 +2),*(femData->integers.connect + i*4 +3));
+		}
+		printf("\n-------------------------------------\n\n");
+	
+		//Copy elementalMaterialNumber, 1 int per element
+		memcpy(femData->integers.el_matl, sharedPointers->elementalMaterialNumber, numberOfElements*sizeof(int));
+	
+		//Copy nodes, 2 doubles per node
+		memcpy(femData->doubles.coord, sharedPointers->nodes, 2*sizeofDouble*numSpatialDim*numNodes);
+	
+		//Copy Fixed X nodes, one int per locked node.
+		memcpy(femData->integers.fixedNodesX, sharedPointers->xLocedNodes, femData->numFixx*sizeof(int));
+		//2 doubles per node
+		memcpy(femData->doubles.displacedNodesX, sharedPointers->xLockedNodesCoord, femData->numFixx*2*sizeofDouble);
+	
+		//Copy Fixed Y nodes, one int per locked node.
+		memcpy(femData->integers.fixedNodesY, sharedPointers->yLocedNodes, femData->numFixy*sizeof(int));
+		//2 doubles per node
+		memcpy(femData->doubles.displacedNodesY, sharedPointers->yLockedNodesCoord, femData->numFixy*2*sizeofDouble);
+	
+		//Copy force nodes, one int per force vector
+		memcpy(femData->integers.nodesWithForce, sharedPointers->forceNodes, femData->numForce*sizeof(int));
+		
+		//Copy forceGroup for nodes, one int per force vector
+		memcpy(femData->integers.forceGroup, sharedPointers->forceGroup, femData->numForce*sizeof(int));
+	
+		//2 doubles per node
+		memcpy(femData->doubles.force, sharedPointers->forceVectors, femData->numForce*numSpatialDim*sizeofDouble);
+	
+		memset(sharedPointers->deformedNodes, 0, numNodes*numSpatialDim*sizeofDouble);
+		memset(sharedPointers->vonMieses, 0, numNodes*sizeofDouble );
+	
+	sem_post(&(shrdMemStruct->semLock));
+	
+		return 0;
+	}
 
 int saveDeformationToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, double* nodalDeformation){
 
@@ -235,7 +304,7 @@ int getForceFromShardeMem(double *Force, double* gravityDirection, sharedMemoryS
 
 	sem_wait(&(shrdMemStruct->semLock));
 	//2 doubles per node
-	memcpy( Force, sharedPointers->forceVectors,numForceNodes*2*sizeofDouble);
+	memcpy( Force, sharedPointers->forceVectors,numForceNodes*numSpatialDim*sizeofDouble);
 		gravityDirection[0] = *(shrdMemStruct->gravityDir + 3*bodyNum);//ignore direction into the page(2 dir)
 		gravityDirection[1] = *(shrdMemStruct->gravityDir + 3*bodyNum + 2);
 	sem_post(&(shrdMemStruct->semLock));
@@ -369,6 +438,79 @@ int saveBodyLoadToSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, dou
 		shrdMemStruct->appliedForceForFEM[bodynum][2] = load2x;
 		shrdMemStruct->appliedForceForFEM[bodynum][3] = load2y;
 	sem_post(&(shrdMemStruct->semLock));
+
+	return 0;
+}
+
+
+int printShrdFemData(sharedMemoryStructForIntegration *shrdMemStruct, int bytesForPointer, int femBodyNumb){
+
+	int sharedMemoryCounter = femBodyNumb*8*sizeof(int);
+	//Headers stored together first, 8 ints * number of FEM bodies.
+	//numel numnp nmat plane_stress_flag, gravity_flag
+	int* header = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	int numberOfElements = *(header);
+	int numNodes = *(header+1);
+	int numMatProperties = *(header+2);
+	int plane_stress_flag = *(header+3);
+	int gravity_flag = *(header+4);
+
+	sharedMemoryCounter = bytesForPointer;
+	double *nodes = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	printf("Nodes of Body %d, in server\n",femBodyNumb);
+	for(int i=0;i<numNodes;i++){
+		printf("[%d, %d] = [%lf, %lf]\n", femBodyNumb,i,*(nodes + i*2 + 0),*(nodes + i*2 + 1));
+
+	}printf("\n\n\n");
+	sharedMemoryCounter += numNodes*numSpatialDim*sizeofDouble;//nodal points is the second int in header
+		//Force vectors:
+		//sharedPointers->forceVectors = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+		sharedMemoryCounter += (numNodes)*sizeofDouble*numSpatialDim;
+	
+		// Material properties;
+		//sharedPointers->mat_E_Poiss_Mass = (double*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter );
+		sharedMemoryCounter += 3*sizeofDouble*numMatProperties;
+	
+		// prescribed displacements X
+		//sharedPointers->xLockedNodesCoord = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+		sharedMemoryCounter += (numNodes+1)*sizeofDouble;
+	
+		// prescribed displacements Y
+		//sharedPointers->yLockedNodesCoord = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+		sharedMemoryCounter += (numNodes+1)*sizeofDouble;
+
+			//Second part is the integers
+	//Elements 
+	printf("Elements of Body %d, in Server\n",femBodyNumb);
+	int *elements = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	for(int i=0;i<numberOfElements;i++){
+		printf("[%d, %d] = [%d, %d, %d, %d];\n",femBodyNumb,i,*(elements+ i*4 +0),*(elements+ i*4 +1),*(elements + i*4 +2),*(elements+ i*4 +3));
+	}printf("\n\n\n");
+	sharedMemoryCounter += numberOfElements*nodesPerElement*sizeof(int);//first int in header is number of elements
+/*
+	//Third is the elements material number
+	sharedPointers->elementalMaterialNumber = (int*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += numberOfElements*sizeof(int);//first int in header is number of elements
+
+	//Nodes with force: 
+	sharedPointers->forceNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeof(int);
+
+	//Force nodes group number:
+	sharedPointers->forceGroup = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes)*sizeof(int);
+
+	//prescribed displacement x: 
+  	sharedPointers->xLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeof(int);
+
+	//prescribed displacement y: 
+  	sharedPointers->yLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeof(int);
+*/
+
+
+
 
 	return 0;
 }
