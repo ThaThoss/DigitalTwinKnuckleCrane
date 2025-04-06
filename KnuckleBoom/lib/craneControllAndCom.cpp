@@ -178,3 +178,35 @@ int globalPosForCrane::moveCrane()
 {
   return (int)*_moveCrane;
 }
+
+int calcBytesNeededForRBD(int nBodies, int axisOfRotation[]){
+
+	int bytesForInitialAng = 0;
+    for(int i=0; i<nBodies;i++){
+        if(axisOfRotation[i]==4){
+            bytesForInitialAng += 12;
+        }else if(axisOfRotation[i]>4 || axisOfRotation[i]<0){
+            std::cout << "invalid rotational axis, axis was: "<< axisOfRotation[i] << ", for body number " << i << std::endl;
+            return 1;
+            
+        }else{
+            bytesForInitialAng += 2;
+        }
+    }
+    std::cout << "numDoubles for Ang = "<< bytesForInitialAng << std::endl;
+
+	//ints
+	int bytesSpatFree = nBodies*3*sizeof(int);
+	int bytesForAxisOfRotation = nBodies*sizeof(int);
+	//doubles
+	int bytesForCmPos = nBodies*3*2*sizeof(double);
+	int bytesForMass = nBodies*sizeof(double);
+	int bytesForInertia = nBodies*9*sizeof(double);
+	int bytesForInitialTransl = nBodies*6*sizeof(double);
+	bytesForInitialAng = bytesForInitialAng*sizeof(double);
+
+	int numBytes =  bytesSpatFree + bytesForAxisOfRotation + (bytesForCmPos + bytesForMass + bytesForInertia + bytesForInitialTransl + bytesForInitialAng);
+
+	return numBytes;
+
+}

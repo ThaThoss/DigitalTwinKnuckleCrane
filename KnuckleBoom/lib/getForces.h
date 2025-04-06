@@ -66,7 +66,7 @@ void get_Forces( struct EndEquationMatrices * endEquationMatrices, struct Frame 
 
     if(c>32){
       c=32.0;
-      printf("Out of reach");
+      printf("Out of reach\n");
     }
     else if(c<11.6){
       c=11.6;

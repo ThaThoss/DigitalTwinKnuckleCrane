@@ -1,6 +1,7 @@
 
 #include <semaphore.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <cstring>
 #include <iostream>
 #include "knuckleComLoop.h"
@@ -25,6 +26,20 @@ void knuckleComLoop(int shmid, int knucklePort, char knuckleIp[16]){
     if (shmStru == (void *) -1) {
       perror("Knuckle Shared memory attach in Knuckle Com Loop");
     }
+    sem_wait(&(shmStru->semLock));
+        int nBodies = shmStru->numRBDbodies;
+        int axisOfRotation[nBodies] = {0};
+        int numBytesTosend = shmStru->numBytesForRBD;
+        memcpy(axisOfRotation,(shmStru->sharedFEMData + shmStru->numBytesForHeader),nBodies*sizeof(int));
+    sem_post(&(shmStru->semLock));
+    SHAREDMEMORYPOINTERSRBD shMemRBDPoint;
+    int semProtect = 1;
+    distributeRbdMemPointers( shmStru,&shMemRBDPoint, axisOfRotation, semProtect );
+
+    sem_wait(&(shmStru->semLock));
+        char *initialDataToSend = (char *)calloc(numBytesTosend,sizeof(char));
+        memcpy(initialDataToSend,shMemRBDPoint.dataForRBD,numBytesTosend);
+    sem_post(&(shmStru->semLock));
 
     char buffer[255] = {0};
 
@@ -42,7 +57,13 @@ void knuckleComLoop(int shmid, int knucklePort, char knuckleIp[16]){
 	if(check){
 		printf("\nServer error with code %s\n",buffer);
 	}
+    sleep(1);
+    SendInt32(sockfd,nBodies);
+    SendNInts(sockfd,axisOfRotation,nBodies*sizeof(int));
 
+    sleep(2);
+    SendNChar(sockfd,initialDataToSend,numBytesTosend);
+    sleep(2);
     write(sockfd,"gogo",sizeof("gogo"));
     while(gogo){
 
@@ -68,6 +89,7 @@ void knuckleComLoop(int shmid, int knucklePort, char knuckleIp[16]){
             gogo = shmStru->gogo;
             shmStru->newData=1;
         sem_post(&(shmStru->semLock));
+       
         
         if(SendNUnsignedChar(sockfd, dataToSend, nCharsToSend))
         {

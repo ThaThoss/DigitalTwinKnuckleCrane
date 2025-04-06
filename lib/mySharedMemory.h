@@ -16,23 +16,31 @@
 typedef struct {
    
    sem_t semLock;
-   //double changeGlobPos[3] = {0};
+   
    double globalPosPoint[3] = {0};
+
    //[r,th1,th2,gogo,moveCrane]
    //[double,double,double,int16,int16]
    unsigned char dataForKnuckle[knuckleNBytesToKnu] = {0};
+
+   int numBytesForRBD = 0;
+   int numBytesForHeader = 0;
    int numBytesForAngles = 96;// R1 = 9 doubles, angles = 3;
+   int bytesForInitialAng = 0;
+
    double angles[3] = {0};
    double angularVel[3] = {0};
    double angularAcc[3] = {0};
    double massTimesAccAndMom[21] = {0};
    int axisOfRotation[4] = {0};
    double gravityDir[12] = {0};
-   double loadOnOuter = 0.0;
-   double momentZforFEM[3] = {0};
-   double appliedForceForFEM[3][4] = {0};
    double R1[9] = {0};
    double mass[3] = {0};
+   double momentZforFEM[3] = {0};
+   double appliedForceForFEM[3][4] = {0}; 
+
+
+   double loadOnOuter = 0.0;
    int16_t gogo = 1;
    int newData = 0;
    int numFEMBodies = 0;
@@ -47,8 +55,6 @@ typedef struct {
    double femZeroPoint[3][2] = {0};
    double femCmPoint[3][2] = {0};
    double femSylinderPrePos[3][2] = {0};
- //  double femLoadPoint1[3][2] = {0};
- //  double femLoadPoint2[3][2] = {0};
    int femNumPointLoads[3] = {0};
 
 
@@ -99,12 +105,25 @@ typedef struct
 
 } sharedMemoryPointers;
 
+typedef struct 
+{
+   int *axisOfRotation;
+   char *dataForRBD;
+   int *spatialFreedom;
+   double *cogCoords;
+   double *mass;
+   double *inertia;
+   double *initialAngularValues;
+   double *initialTranslationalValues;
 
+}SHAREDMEMORYPOINTERSRBD;
 
+int calcBytesNeededForRBD(int nBodies, int axisOfRotation[]);
 int calcBytesNeededForFEM(int numel, int numnp, int nmat, int plane_stress_flag, int gravity_flag);
 int getFEMHeader(FEMDATATOSEND *dataToSend,sharedMemoryStructForIntegration *shmStruct, int femBodyNumber);
 int getFEMHeaders(int headers[][8], sharedMemoryStructForIntegration *shmStruct, int nFEMBodies);
 int distrubuteFemSharedMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,sharedMemoryPointers *sharedPointers, int femBodyNumber, int bytesForPointer );
+int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers, int *rotationalAxis, int semProtect );
 
 int saveFemData(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, int femBodyNumber, int bytesForPointer );
 int getFemData(sharedMemoryStructForIntegration *shrdMemStruct,FEMDATATOSEND *femData,sharedMemoryPointers *sharedPointers, int femBodyNumber );

@@ -63,6 +63,7 @@ int main(int argc, char *argv[]){
     sem_wait(&(shmStru->semLock));
         int nFEMBodies = shmStru->numFEMBodies;
         int nRBDBodies = shmStru->numRBDbodies;
+        int numBytesBefFEM = shmStru->numBytesBefFEM;
     sem_post(&(shmStru->semLock));
 
     int headers[nFEMBodies][8] = {0};
@@ -81,7 +82,7 @@ int main(int argc, char *argv[]){
     cout << "XBoxController Client connected" << endl;
    
     int bytesForPointer[4] = {0};
-    bytesForPointer[0] = sizeof(int)*8*nFEMBodies;
+    bytesForPointer[0] = numBytesBefFEM ;
     thread *commThreadFEM[nFEMBodies];
 
     sem_t semSyncWait;  // Synchronization semaphore
@@ -139,11 +140,12 @@ int main(int argc, char *argv[]){
     int check = 0;
     double *angles = (double*)calloc(12,sizeofDouble);
     double gravityDir[12] = {0};
-
+   // cout << "In server Internal, be load on outer" << endl;fflush(stdout);
     double loadOnOuter = returnLoadOnOuter(shmStru);
     VALUESFORFORCECALC valuesForForceCalc[nFEMBodies];
-    for(int i=0;i<nFEMBodies;i++){
 
+    for(int i=0;i<nFEMBodies;i++){
+  //cout << "In server Internal, bef getValuesForCalc nr "<<i << endl;fflush(stdout);
         getValuesForCalc(&valuesForForceCalc[i], shmStru,i);
 
     }
@@ -157,12 +159,14 @@ int main(int argc, char *argv[]){
     int preGroupNum = 0;
     int maxGrupNum = 0;
     for(int j=0; j<nFEMBodies;j++){
+        sem_wait(&shmStru->semLock);
 
         for (int i=0; i<shmStru->numForce[j]; i++){
             if(preGroupNum <= shmPointers[j].forceGroup[i]){
                 preGroupNum = shmPointers[j].forceGroup[i]+1;
             }     
         }
+        sem_post(&shmStru->semLock);
         nforceGroups[j] = preGroupNum; 
         if(maxGrupNum<preGroupNum){
             maxGrupNum = preGroupNum;
@@ -172,30 +176,32 @@ int main(int argc, char *argv[]){
         preGroupNum = 0;
     }
 
-
+    //cout << "In server Internal, numNodesPerForceGroup" << endl;fflush(stdout);
     int numNodesPerForceGroup[nFEMBodies*maxGrupNum] = {0};
 
 
     for(int j=0; j<nFEMBodies;j++){
         for(int k=0; k<nforceGroups[j];k++){
+            sem_wait(&shmStru->semLock);
             for(int i=0; i<shmStru->numForce[j];i++){
                 if(k==shmPointers[j].forceGroup[i]){
                     *(numNodesPerForceGroup + j*maxGrupNum + k ) += 1;
                 }
             }
+            sem_post(&shmStru->semLock);
         }
     }
 
 
-
+    //cout << "In server Internal, sem_post" << endl;fflush(stdout);
     for (int i = 0; i < nFEMBodies; i++) {
         sem_post(&semSyncGo);
     }
 
-    
+    //cout << "In server Internal, while gogo" << gogo<<endl;fflush(stdout);
     while(gogo){
 
-        //cout << "In com loop Internal, waiting for loops to finish" << endl;
+        cout << "In com loop Internal, waiting for loops to finish" << endl;fflush(stdout);
         for (int i = 0; i < nFEMBodies; i++) {
             sem_wait(&semSyncWait);
         }
@@ -224,15 +230,9 @@ int main(int argc, char *argv[]){
 
         gogo = isGogo(shmStru);
     }
+    cout << "gogo in Internal was " << gogo << "shutting down" << endl;
 
     free(angles);
-    shmdt(shmStru);
-    std::cout << "gogo in getReactionForce was 0, shutting down forceKnuckleToFEMLoop" << std::endl;
-
-
-
-
-
 
     for(int i=0;i<nFEMBodies;i++){
         commThreadFEM[i]->join();

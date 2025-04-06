@@ -77,7 +77,7 @@ int ReceiveInt32(int sockfd, int *returnValue){
 	int left = sizeof(ret);
 	int rc;
 	int n=0;
-	char ready[] = "ready";
+	//char ready[] = "ready";
 //	n = write(sockfd, ready, strlen(ready));
 	do{
 		rc = read(sockfd, data, left);

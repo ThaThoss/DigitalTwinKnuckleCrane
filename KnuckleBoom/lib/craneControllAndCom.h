@@ -51,4 +51,6 @@ public:
 
 };
 
+int calcBytesNeededForRBD(int nBodies, int axisOfRotation[]);
+
 #endif

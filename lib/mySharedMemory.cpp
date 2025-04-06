@@ -10,7 +10,37 @@
 #include "./forceKnuckleToFEMLoop.h"
 
 
+int calcBytesNeededForRBD(int nBodies, int axisOfRotation[]){
 
+	int bytesForInitialAng = 0;
+    for(int i=0; i<nBodies;i++){
+        if(axisOfRotation[i]==4){
+            bytesForInitialAng += 12;
+        }else if(axisOfRotation[i]>4 || axisOfRotation[i]<0){
+            std::cout << "invalid rotational axis, axis was: "<< axisOfRotation[i] << ", for body number " << i << std::endl;
+            return 1;
+            
+        }else{
+            bytesForInitialAng += 2;
+        }
+    }
+    std::cout << "numDoubles for Ang = "<< bytesForInitialAng << std::endl;
+
+	//ints
+	int bytesSpatFree = nBodies*3*sizeof(int);
+	int bytesForAxisOfRotation = nBodies*sizeof(int);
+	//doubles
+	int bytesForCmPos = nBodies*3*2*sizeof(double);
+	int bytesForMass = nBodies*sizeof(double);
+	int bytesForInertia = nBodies*9*sizeof(double);
+	int bytesForInitialTransl = nBodies*6*sizeof(double);
+	bytesForInitialAng = bytesForInitialAng*sizeof(double);
+
+	int numBytes =  bytesSpatFree + bytesForAxisOfRotation + (bytesForCmPos + bytesForMass + bytesForInertia + bytesForInitialTransl + bytesForInitialAng);
+
+	return numBytes;
+
+}
 
 int calcBytesNeededForFEM(int numbElements, int numNodalPoints, int numMaterial, int plane_stress_flag, int gravity_flag){
 
@@ -49,7 +79,7 @@ int getFEMHeader(FEMDATATOSEND *dataToSend, sharedMemoryStructForIntegration *sh
 
 	sem_wait(&(shmStruct->semLock));
 		//numel numnp nmat plane_stress_flag, gravity_flag
-		int *femHeader = (int*)(shmStruct->sharedFEMData + sizeof(int)*8*femBodyNumber );
+		int *femHeader = (int*)(shmStruct->sharedFEMData + sizeof(int)*8*femBodyNumber);
 		dataToSend->numEl = femHeader[0];
 		dataToSend->numNodPnt = femHeader[1];
 		dataToSend->numMaterial = femHeader[2];
@@ -108,8 +138,7 @@ sem_wait(&(shrdMemStruct->semLock));
 	int numberOfElements = *(sharedPointers->header);
 	int numNodes = *(sharedPointers->header+1);
 	int numMatProperties = *(sharedPointers->header+2);
-	int plane_stress_flag = *(sharedPointers->header+3);
-	int gravity_flag = *(sharedPointers->header+4);
+
 
 	//Jump to the start of this bodies data, data is ordered with doubles first, then ints. Then solution data
 	//Nodal coordinates
@@ -169,7 +198,56 @@ sem_wait(&(shrdMemStruct->semLock));
 sem_post(&(shrdMemStruct->semLock));
 	return 0;
 }
+int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers, int *rotationalAxis, int semProtect ){
 
+	int dataCounter = 0;
+	printf("waiting for sem");
+	if(semProtect){
+		sem_wait(&(shrdMemStruct->semLock));
+	}
+	int nBodies = shrdMemStruct->numRBDbodies;
+	sharedMemoryRBDPointers->dataForRBD = (shrdMemStruct->sharedFEMData + shrdMemStruct->numBytesForHeader);
+	sharedMemoryRBDPointers->axisOfRotation = (int *)sharedMemoryRBDPointers->dataForRBD; 
+	dataCounter += nBodies*sizeof(int);
+
+	sharedMemoryRBDPointers->spatialFreedom = (int *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*3*sizeof(int);
+
+	sharedMemoryRBDPointers->cogCoords = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*2*3*sizeof(double);
+
+
+	sharedMemoryRBDPointers->mass = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*sizeof(double);
+
+	sharedMemoryRBDPointers->inertia = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*9*sizeof(double);
+
+	int bytesForInitialAng = 0;
+    for(int i=0; i<nBodies;i++){
+        if(rotationalAxis[i]==4){
+            bytesForInitialAng += 12;
+        }else if(rotationalAxis[i]>4 || rotationalAxis[i]<0){
+            std::cout << "invalid rotational axis, axis was: "<< rotationalAxis[i] << ", for body number " << i << std::endl;
+            return 1;
+            
+        }else{
+            bytesForInitialAng += 2;
+        }
+    }
+
+
+	sharedMemoryRBDPointers->initialAngularValues = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += bytesForInitialAng*sizeof(double);
+
+	sharedMemoryRBDPointers->initialTranslationalValues = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*6*sizeof(double);
+
+	if(semProtect){
+		sem_post(&(shrdMemStruct->semLock));
+	}
+	return 0;
+}
 
 int saveFemData(sharedMemoryStructForIntegration *shrdMemStruct,FEMDATATOSEND *femData,sharedMemoryPointers *sharedPointers, int femBodyNumber, int bytesForPointer ){
 
@@ -178,8 +256,6 @@ sem_wait(&(shrdMemStruct->semLock));
 	int numberOfElements = *(sharedPointers->header);
 	int numNodes = *(sharedPointers->header+1);
 	int numMatProperties = *(sharedPointers->header+2);
-	int plane_stress_flag = *(sharedPointers->header+3);
-	int gravity_flag = *(sharedPointers->header+4);
 
 	shrdMemStruct->numForce[femBodyNumber] = femData->numForce;
 
@@ -229,8 +305,6 @@ int getFemData(sharedMemoryStructForIntegration *shrdMemStruct,FEMDATATOSEND *fe
 		int numberOfElements = *(sharedPointers->header);
 		int numNodes = *(sharedPointers->header+1);
 		int numMatProperties = *(sharedPointers->header+2);
-		int plane_stress_flag = *(sharedPointers->header+3);
-		int gravity_flag = *(sharedPointers->header+4);
 	
 		femData->numForce = shrdMemStruct->numForce[femBodyNumber];
 	
@@ -239,12 +313,13 @@ int getFemData(sharedMemoryStructForIntegration *shrdMemStruct,FEMDATATOSEND *fe
 	
 		//Copy elements over,4 ints per element
 		memcpy(femData->integers.connect, sharedPointers->elements, numberOfElements*nodesPerElement*sizeof(int));
+		/*
 		printf("\n\nElements in get FemData from femBody %d\n\n", femBodyNumber);
 		for(int i=0;i<numberOfElements;i++){
 			printf("[%d, %d] = [%d, %d, %d, %d];\n",femBodyNumber,i,*(femData->integers.connect + i*4 +0),*(femData->integers.connect + i*4 +1),*(femData->integers.connect + i*4 +2),*(femData->integers.connect + i*4 +3));
 		}
 		printf("\n-------------------------------------\n\n");
-	
+	*/
 		//Copy elementalMaterialNumber, 1 int per element
 		memcpy(femData->integers.el_matl, sharedPointers->elementalMaterialNumber, numberOfElements*sizeof(int));
 	
@@ -328,12 +403,12 @@ int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, doubl
 	int anglesCounter = 0;
 	double *R = angles;
 	double cs,si;
-	//std::cout << "axisDIr = ["<<axisDir[0] << " , "<<axisDir[1] << " , " << axisDir[2] << " , " << axisDir[3] << std::endl;
+	std::cout << "axisDir from internal calcGravity... = ["<<axisDir[0] << " , "<<axisDir[1] << " , " << axisDir[2] << " , " << axisDir[3] << std::endl;
 
 	for(int i=0;i<numRBDBodies;i++){
 
 		switch (axisDir[i]){
-			case 0:
+			case 4:
 				R = (angles + anglesCounter);
 				// e(1)R^T*g
 				*(gravityDir + i*3 + 0) = R[0]*tempGravityDir[0] + R[3]*tempGravityDir[1] + R[6]*tempGravityDir[2];
@@ -377,7 +452,7 @@ int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, doubl
 				//std::cout << "-calcGravityDirAndSave- angle case 3 of body: " << i << " = " << *(angles + anglesCounter) << std::endl;
 				break;
 			default:
-				std::cout << "axis has invalid value in calcGravityDirAndSave from mySharedMemory. Axis was" <<  axisDir[i] << std::endl;
+				std::cout << "------- axis has invalid value in calcGravityDirAndSave from mySharedMemory. Axis was" <<  axisDir[i] << "-------------------------"<<std::endl;
 				return 1;
 		}
 		//std::cout << "--calcGravityDirAndSave-- gravitydir body "<< i <<" =[" << *(gravityDir + i*3)<<" , " << *(gravityDir + i*3+1) << " , " << *(gravityDir + i*3+2) << std::endl;
@@ -445,15 +520,16 @@ int saveBodyLoadToSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, dou
 
 int printShrdFemData(sharedMemoryStructForIntegration *shrdMemStruct, int bytesForPointer, int femBodyNumb){
 
+	printf("bef Shared Lock");
+	sem_wait(&(shrdMemStruct->semLock));
 	int sharedMemoryCounter = femBodyNumb*8*sizeof(int);
 	//Headers stored together first, 8 ints * number of FEM bodies.
 	//numel numnp nmat plane_stress_flag, gravity_flag
-	int* header = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	int *header = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	int numberOfElements = *(header);
 	int numNodes = *(header+1);
 	int numMatProperties = *(header+2);
-	int plane_stress_flag = *(header+3);
-	int gravity_flag = *(header+4);
+	printf("in print Shared, nEl %d, nNode %d, nMat %d", numberOfElements,numNodes,numMatProperties);
 
 	sharedMemoryCounter = bytesForPointer;
 	double *nodes = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
@@ -511,6 +587,6 @@ int printShrdFemData(sharedMemoryStructForIntegration *shrdMemStruct, int bytesF
 
 
 
-
+	sem_post(&(shrdMemStruct->semLock));
 	return 0;
 }

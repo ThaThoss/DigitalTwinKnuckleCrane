@@ -38,12 +38,18 @@ int main(int argc, char *argv[]){
     ReceiveNInts(clientSoc,nBodies,sizeof(nBodies));
     cout <<"Recieved number of bodies, RBD: " <<nBodies[0]<<", fem: " << nBodies[1] << endl;
 
+    // get rotaional axis for RBD
+    sleep(2);
+    int rotationalAxis[nBodies[0]] = {0};
+    ReceiveNInts(clientSoc,rotationalAxis,nBodies[0]*sizeof(int));
+
     //recieve FEM data
     int headersNew[nBodies[1]*8] = {0};
+    int numBytesHeader = 8*nBodies[1]*sizeof(int);
 
     sleep(2);
     cout << "Recieving headers"<< endl;fflush(stdout);
-    if(ReceiveNInts(clientSoc,headersNew,3*8*sizeof(int))){
+    if(ReceiveNInts(clientSoc,headersNew,numBytesHeader)){
         cout << "someting wrong with Recieve Headers" << endl;
         return 1; 
     };
@@ -57,8 +63,8 @@ int main(int argc, char *argv[]){
 
     //numel numnp nmat plane_stress_flag, gravity_flag
     //196 	250   1   1   1 // dog file;
-    int headers[nFEMBodies][8] = {{2460, 2566,   1,   1,   1, 41, 41, 7},{2220, 2397,   1,   1,   1, 42, 42, 40 },{1328, 1468,   1,   1,   1, 36, 36, 25}};
-    int deformationScale[3] = {200,3,30};
+    //int headers[nFEMBodies][8] = {{2460, 2566,   1,   1,   1, 41, 41, 7},{2220, 2397,   1,   1,   1, 42, 42, 40 },{1328, 1468,   1,   1,   1, 36, 36, 25}};
+    int deformationScale[3] = {200,3,3};
     int bodyScale[3] = {1,2,2};
     double femZeroPoint[3][2] = {{0,0},{0.2,0.5},{2.07,1.1}};//Where the previous body is attached, used in serverexternal for positioning the fem bodies
     double femSylinderPrePos[3][2] = {{0,0},{1.7,0.006},{0.25,0.97}};//Where the fixed area of the previous body's cylinder comes in
@@ -66,18 +72,21 @@ int main(int argc, char *argv[]){
     double femCmPoint[3][2] = {{2.5,3.0},{2.3,0.325},{1.225,0.553}}; //Coordinate of the centre of mass.
     double femJointPos[3][2] = {{2.4,5.6},{4.4,0.5},{0.25,0.0456}};//Where the next body is attached,  used in serverexternal for positioning the fem bodies
     double angles[3] = {0,0,0};
-    int axisOfRotation[4] = {0,3,2,2};
+    //int axisOfRotation[4] = {4,3,2,2};
 
     int numBytesForSharedMemory = 0;
     numBytesForSharedMemory += sizeof(sharedMemoryStructForIntegration);//Size of known sizes in struct
     numBytesForSharedMemory += sizeof(int)*8*nFEMBodies;// header for FEM files, 8 ints each;
+    int nBytesRBD = calcBytesNeededForRBD( nBodies[0], rotationalAxis);// bytes for RBD
+    numBytesForSharedMemory += nBytesRBD;
 
     for(int i=0;i<nFEMBodies;i++){
-        numBytesForSharedMemory += calcBytesNeededForFEM( headersNew[i*8 + 0],  headersNew[i*8 + 1],  headersNew[i*8 + 2],  headersNew[i*8 + 3],  headersNew[i*8 + 4]);
+        numBytesForSharedMemory += calcBytesNeededForFEM( headersNew[i*8 + 0],  headersNew[i*8 + 1],  
+                                    headersNew[i*8 + 2],  headersNew[i*8 + 3],  headersNew[i*8 + 4]);
     }
 
 
-     /*Shared memory section:*/
+    /*Shared memory section:*/
 	sharedMemoryStructForIntegration *shmStru;
 	key_t key = ftok("./../lib/sharedMemoryFile",KEY_VAL);
     
@@ -98,6 +107,18 @@ int main(int argc, char *argv[]){
     }
     sem_init(&(shmStru->semLock),1,1);
     sem_wait(&(shmStru->semLock));
+    //Recieve axis again, easier to send everything.
+    ReceiveNChars(clientSoc,(shmStru->sharedFEMData + numBytesHeader),nBytesRBD );
+    cout << "Recieved RBD data"<< endl;
+    shmStru->numBytesForRBD = nBytesRBD;
+    shmStru->numBytesForHeader = numBytesHeader;
+
+    SHAREDMEMORYPOINTERSRBD sharedMemoryRBDPointers;
+    int semProtect = 0;
+    distributeRbdMemPointers( shmStru,&sharedMemoryRBDPointers, rotationalAxis, semProtect );
+    cout << "After distributeRbdMemPointers RBD data"<< endl;
+
+
         memcpy(shmStru->R1,zerosForShm,SZ_DOUBLE*9);
         shmStru->R1[0] = 1.0;
         shmStru->R1[4] = 1.0;
@@ -106,7 +127,7 @@ int main(int argc, char *argv[]){
         shmStru->mass[1] = 150;
         shmStru->mass[2] = 150;
         shmStru->gogo = 1;
-        shmStru->loadOnOuter = 10000.0;
+        shmStru->loadOnOuter = 1000.0;
         shmStru->numBytesForAngles = 96;
         shmStru->femDataReady = 0;
         memcpy(shmStru->angles,zerosForShm,SZ_DOUBLE*3);
@@ -120,7 +141,7 @@ int main(int argc, char *argv[]){
         int femNumPointLoads[3] = {2,2,1};
 
         for(int i=0; i<nFEMBodies;i++){
-            memcpy(shmStru->sharedFEMData + numBytesToJump,(headersNew +i*8),8*sizeof(int));  
+            memcpy(shmStru->sharedFEMData + numBytesToJump,(headersNew + i*8),8*sizeof(int));  
             memcpy(shmStru->femZeroPoint[i],femZeroPoint[i], sizeofDouble*2); 
             memcpy(shmStru->femCmPoint[i],  femCmPoint[i],   sizeofDouble*2);  
             memcpy(shmStru->femJointPos[i], femJointPos[i], sizeofDouble*2);   
@@ -135,24 +156,25 @@ int main(int argc, char *argv[]){
            
     
         }
-        for(int i=0;i<4;i++){
-            shmStru->axisOfRotation[i] = axisOfRotation[i];
-        }
-
-        shmStru->numBytesBefFEM = numBytesToJump;
+        memcpy(shmStru->axisOfRotation,rotationalAxis,nBodies[0]*sizeof(int));
+        /*
+        for(int i=0;i<nBodies[0];i++){
+            shmStru->axisOfRotation[i] = rotationalAxis[i];
+        }*/
+        shmStru->numBytesBefFEM = numBytesToJump + nBytesRBD;
 
         int numBytesForFEMBodie[nBodies[1]+1] = {0};
         int bytesForPointer[nBodies[1]+1] = {0};
-        bytesForPointer[0] = sizeof(int)*8*nFEMBodies;
-
+        bytesForPointer[0] = numBytesToJump + nBytesRBD;
 
         for(int i=0;i<nBodies[1];i++){
             cout << "recieving body: "<< i+1 << ", out of: "<< nBodies[1]<<endl;
-            numBytesForFEMBodie[i+1] = calcFemNumBytesFromClient( headers[i]);
+            numBytesForFEMBodie[i+1] = calcFemNumBytesFromClient( (headersNew + 8*i));
             cout << "numBytesToRecieve: " << numBytesForFEMBodie[i+1] << endl;
-            bytesForPointer[i+1] = bytesForPointer[i] + calcBytesNeededForFEM( headers[i][0],  headers[i][1],  headers[i][2],  headers[i][3],  headers[i][4]);
+            bytesForPointer[i+1] = bytesForPointer[i] + calcBytesNeededForFEM( *(headersNew +i*8 + 0),  *(headersNew +i*8 + 1),  *(headersNew +i*8 + 2),  *(headersNew +i*8 + 3), *(headersNew +i*8 + 4));
             ReceiveNChars(clientSoc,(shmStru->sharedFEMData + bytesForPointer[i]), numBytesForFEMBodie[i+1]);
-            printShrdFemData(shmStru, bytesForPointer[i], i);
+            cout << "printing mesh"<< endl;
+            //printShrdFemData(shmStru, bytesForPointer[i], i);
 
         }      
         cout << "done recieving mesh" <<endl;

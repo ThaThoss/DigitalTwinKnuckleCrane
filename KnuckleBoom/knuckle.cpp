@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <math.h>
 #include <time.h>
 #include <sys/time.h>
@@ -25,7 +26,6 @@
 #define PORT "8080"
 #define IP "127.0.0.1"
 
-/*#include "MBDfunctionDeclare.h"*/
 
 using namespace std;
 
@@ -36,41 +36,8 @@ int main(int argc, char* argv[])
   double time = 0, timestep = 0.005, dt =  0;
   char buffer[255];
 
-/*
-  struct timespec preTime, realTime, startTime;
-  preTime =(struct timespec){0};
-  realTime =(struct timespec){0};
-  startTime =(struct timespec){0};
-*/
-
   PreciseSleep mySleep;
-/*
-  FILE *f = fopen("testData.txt", "w");
-  if(f == NULL)
-  {
-      printf("Error opening file!\n");
-      exit(1);
-  }
-  FILE *g = fopen("testR1data.txt", "w");
-  if(g == NULL)
-  {
-      printf("Error opening file!\n");
-      exit(1);
-  }
-  FILE *PosErrorFile = fopen("PosError.txt", "w");
-  if(PosErrorFile == NULL)
-  {
-      printf("Error opening file!\n");
-      exit(1);
-  }*/
-  /* Header for the data file 
-  const char *Categories = "Ang1, ang2, ang3,angv1,angv2,angv3,dt";
 
-  fprintf(f, "%s\n", Categories);
-
-  const char *CategoriesForMoments = "R[0],R[1],R[2]";
-  fprintf(g, "%s\n", CategoriesForMoments);
-*/
   //Integration constants for RK4
   double a[4][4] = {0};
         a[1][1] = 0.5;
@@ -84,7 +51,22 @@ int main(int argc, char* argv[])
   b[2] = 1.0/3.0;
   b[3] = 1.0/6.0;
 
+  //Connect to client:
+	printf("Attempting to respond...");
+  int sockfd = atoi(argv[1]);
+  int nBodies = 0;
+  int rc = write(sockfd,"200",sizeof("200"));
+  ReceiveInt32(sockfd,&nBodies);
+  int axisOfRotations[nBodies] = {0};
+  sleep(1);
+  ReceiveNInts(sockfd,axisOfRotations,nBodies*sizeof(int));
+  int nBytesToRecive = calcBytesNeededForRBD( nBodies, axisOfRotations);
+  char *initialData = (char *)calloc(nBytesToRecive,sizeof(char));
+  ReceiveNChars(sockfd,initialData,nBytesToRecive);
 
+
+
+  
 /*Set array Data*/
   struct ArrayData myArrayData; 
     myArrayData.spatialDim = 3;
@@ -160,40 +142,12 @@ int main(int argc, char* argv[])
 
 
 
-  //Connect to client:
-	printf("Attempting to respond...");
-  int sockfd = atoi(argv[1]);
 
- 
- /*
-  int sockfd = connectToServer(portnum, ip); 
-  std::cout << "Knuckle connected to client " << std::endl;
-  
-  read(sockfd,buffer,255);
-	printf("Server connected, ansver was %s\n",buffer);
-  check = strncmp(buffer,"200",3);
-  if(check){
-		printf("\nServer error with code %s\n",buffer);
-		return -1;
-	}
- */
 
 //Initialize globalPosForCrane object
   globalPosForCrane craneTip(sockfd, timestep, myPhysicalValues, Frames);
   
-/*
-    for(int k=0; k<3; k++){
-      for(int l=0;l<3;l++){
-        fprintf(g, "%lf", Frames[0].AbsR.R[k][l]);
-        if(k+l<4){
-          fprintf(g, ", ");
-        }else{
-          fprintf(g, "\n");
-        }
-      }
-    }
-*/
-  int rc = write(sockfd,"200",sizeof("200"));
+ 
   //Wait for client to be ready
   read(sockfd,buffer,255);
 	check = strncmp(buffer,"gogo",4);
@@ -323,6 +277,7 @@ int main(int argc, char* argv[])
   }//end main for(i)
 
   KillMemory( &endEquationMatrices, &mySolutionVectors);
+  free(initialData);
   printf("\nI'm done \n");
 /*
   fclose(g);
@@ -330,7 +285,7 @@ int main(int argc, char* argv[])
 */  
   time = mySleep.getTotalDuration();
    
-  printf("total time in knuckle was: %lf\n, knucle closed", time);
+  printf("total time in knuckle was: %lf\n, knucle closed\n", time);
 
   return 1;
 }

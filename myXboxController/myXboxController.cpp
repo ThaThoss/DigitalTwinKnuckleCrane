@@ -18,6 +18,7 @@
 #include "./../lib/commonDataSizes.h"
 #include "./myXboxController.h"
 #include "./../lib/myLinearMapping.h"
+#include "./../lib/rbdClient.h"
 
 #define PORT "8085"
 #define IP "127.0.0.1"
@@ -36,21 +37,22 @@ int main(int argc, char* argv[]){
     sa.sa_flags = 0; 
     sigaction(SIGINT, &sa, NULL);
 
-    int numFEMfiles = 0;
+    
     std::string path = "../meshFiles/";
-    std::string filenameRegex = R"(femMesh(\d+)_([A-Za-z0-9_]+)\.dat)";
 
-    std::vector<FEMFILE> files = findFemFiles(path, filenameRegex);
 
-    for (const auto& file : files) {
-        std::cout << "Mesh " << file.meshNumber << " (" << file.partName << "): "
-                  << file.filename << "\n";
-        numFEMfiles++;
-    }
+
+    /*-----------------------------------Reading FEM files---------------------------*/
+    int numFEMfiles = 0;
+    std::string filenameRegexFEM = R"(femMesh(\d+)_([A-Za-z0-9_]+)\.dat)";
+    
+
+    std::vector<FEMFILE> filesFEM = findFemFiles(path, filenameRegexFEM);
+    numFEMfiles = filesFEM.size();
 
     FEMDATATOSEND initialDataToSend[numFEMfiles];
     int counter = 0;
-    for(const auto& file : files){
+    for(const auto& file : filesFEM){
         std::cout << "Reading mesh from: " << file.filename << std::endl;
         femReadMesh(&initialDataToSend[counter], file.filename.c_str());
         counter++;
@@ -60,7 +62,51 @@ int main(int argc, char* argv[]){
         std::cout << "Something wrong with file readers, exiting"<<std::endl;
         return 1;
     }
-    std::cout << "Done reading filesm ,num fem files was" <<numFEMfiles<< std::endl;
+    std::cout << "Done reading files ,num fem files was" <<numFEMfiles<< std::endl;
+    /*-------------------------------------------------------------------------------------------------------*/
+
+
+
+    /*-----------------------------------Reading RBD Files---------------------------*/
+    std::string filenameRegexRBD = R"(^RBD.*\.dat$)";
+    std::vector<std::string> filesRBD = findRBDFiles(path, filenameRegexRBD);
+    if (filesRBD.empty()) {
+        std::cerr << "No RBD*.dat files found.\n";
+        return 1;
+    }
+    std::string selectedFile;
+
+    if (filesRBD.size() == 1) {
+        selectedFile = filesRBD[0];
+        std::cout << "Only one file found: " << selectedFile << "\n";
+    } else {
+        std::cout << "Multiple RBD files found:\n";
+        for (std::size_t i = 0; i < filesRBD.size(); ++i) {
+            std::cout << " [" << i << "] " << filesRBD[i] << "\n";
+        }
+
+        int choice = -1;
+        while (true) {
+            std::cout << "Enter the index of the file to use: ";
+            std::cin >> choice;
+
+            if (std::cin.fail() || choice < 0 || choice >= static_cast<int>(filesRBD.size())) {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Try again.\n";
+            } else {
+                selectedFile = filesRBD[choice];
+                break;
+            }
+        }
+    }
+    std::cout << "RBD File " << selectedFile<< " selected" << std::endl;
+    RBDDATATOSEND RBDdataToSend;
+    readRBDdata(&RBDdataToSend,  selectedFile.c_str());
+    std::cout << "done reading RBDdata"<< std::endl;
+
+
+    /*-----------------------------------------------------------------------------------------------------*/
 
 	int sockfd, check, portnum;
 	int16_t angle[4] = {0};
@@ -109,11 +155,14 @@ int main(int argc, char* argv[]){
 	}
     //sleep(2);  // 2,000,000 microseconds (2 sec)
     printf("Sending Bodies\n");fflush(stdout);
-    int bodies[2] = {4,3};
+    int bodies[2] = {RBDdataToSend.nBodies,numFEMfiles};
     if(SendNInts(sockfd,bodies,sizeof(int)*2)){
 		std::cout << "Error in SendNInts for bodies in clientControll" << std::endl;
 		return 1;	
 	}
+
+    //Send axis of rotaions
+    SendNInts(sockfd,(RBDdataToSend.axisOfRotations),RBDdataToSend.nBodies*sizeof(int));
   
 
     int headersToSend[numFEMfiles*8] = {0};
@@ -129,15 +178,21 @@ int main(int argc, char* argv[]){
         printf("Body %d: numEl %d, numNod %d, mat: %d, flag: %d, grav: %d, fixX %d, fixY %d, and nForce %d\n",i,initialDataToSend[i].numEl,initialDataToSend[i].numNodPnt, initialDataToSend[i].numMaterial, initialDataToSend[i].PlaneStressFlag, initialDataToSend[i].gravity_Flag, initialDataToSend[i].numFixx,initialDataToSend[i].numFixy,initialDataToSend[i].numForce);
     }
     printf("Sending Headers\n");fflush(stdout);   
-    if(SendNInts(sockfd,headersToSend,sizeof(int)*8*3)){
+    if(SendNInts(sockfd,headersToSend,sizeof(int)*8*numFEMfiles)){
 		std::cout << "Error in SendNInts for headers in clientControll" << std::endl;
 		return 1;	
 	}
-    sleep(10);
-    
+
+    //send RBD data, includir rotational axis
+    sleep(2);
+    SendNChar(sockfd,RBDdataToSend.data,RBDdataToSend.numBytes);
+
+
+
+      
     for(int i=0;i<numFEMfiles; i++){
         printf("Sending Mesh %d\n",i);fflush(stdout); 
-        printElements(&initialDataToSend[i], i);
+        //printElements(&initialDataToSend[i], i);
 
         int numBytes= initialDataToSend[i].sizeOfMemDoubles*sizeof(double) + initialDataToSend[i].sizeOfMemIntegers*sizeof(int);
         SendNChar(sockfd,initialDataToSend[i].allTheData,numBytes);
