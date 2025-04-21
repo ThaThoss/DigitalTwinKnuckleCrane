@@ -16,6 +16,9 @@
 typedef struct {
    
    sem_t semLock;
+
+
+   int isKnuckleRunning = 0;
    
    double globalPosPoint[3] = {0};
 
@@ -26,6 +29,7 @@ typedef struct {
    int numBytesForRBD = 0;
    int numBytesForHeader = 0;
    int numBytesForAngles = 96;// R1 = 9 doubles, angles = 3;
+   int numAngles = 0;
    int bytesForInitialAng = 0;
 
    double angles[3] = {0};
@@ -103,6 +107,12 @@ typedef struct
    // vonMieses stress
    double *vonMieses;
 
+   char *finalFEMResultToSend;
+
+   int numBytesForFEMToSend = 0;
+
+   int numAngAcc = 0;
+
 } sharedMemoryPointers;
 
 typedef struct 
@@ -115,22 +125,30 @@ typedef struct
    double *inertia;
    double *initialAngularValues;
    double *initialTranslationalValues;
+   double *angAcc;
+   double *massTimesAcc;
+   double *craneGlobalPos;
+   double *appliedLoads;
 
 }SHAREDMEMORYPOINTERSRBD;
 
-int calcBytesNeededForRBD(int nBodies, int axisOfRotation[]);
+int calcBytesNeededForRBD(int nRbdBodies,int nFemBodies, int axisOfRotation[]);
+int calcNumBytesForInitialAngRBD(int rotationalAxis[],int nBodies);
+int calcNumAngAccForRBD(int rotationalAxis[], int nBodies);
 int calcBytesNeededForFEM(int numel, int numnp, int nmat, int plane_stress_flag, int gravity_flag);
 int getFEMHeader(FEMDATATOSEND *dataToSend,sharedMemoryStructForIntegration *shmStruct, int femBodyNumber);
 int getFEMHeaders(int headers[][8], sharedMemoryStructForIntegration *shmStruct, int nFEMBodies);
 int distrubuteFemSharedMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,sharedMemoryPointers *sharedPointers, int femBodyNumber, int bytesForPointer );
 int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers, int *rotationalAxis, int semProtect );
+int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers );
 
 int saveFemData(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, int femBodyNumber, int bytesForPointer );
 int getFemData(sharedMemoryStructForIntegration *shrdMemStruct,FEMDATATOSEND *femData,sharedMemoryPointers *sharedPointers, int femBodyNumber );
 int saveDeformationToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, double *nodalDeformation);
 int saveVonMiesesToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, double *vonMieses);
+int saveForceResultToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, double* force);
 int getForceFromShardeMem(double *Force, double* gravityDirection, sharedMemoryStructForIntegration *shrdMemStruct,sharedMemoryPointers *sharedPointers, int numForceNodes, int bodyNum);
-int getAnglesFromSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, double *angles);
+int getAnglesFromSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers, double *angles, double *angAcc, double *craneGlobPos);
 
 int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, double * angles, double* gravityDir);
 int isGogo(sharedMemoryStructForIntegration *shrdMemStruct); //returns 1 for yes, 0 for no.
@@ -138,6 +156,10 @@ int dontGogo(sharedMemoryStructForIntegration *shrdMemStruct);
 double returnLoadOnOuter(sharedMemoryStructForIntegration *shrdMemStruct);
 
 int saveBodyLoadToSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, double load1x, double load1y, double load2x, double load2y, int bodynum );
+int setForceGroups(sharedMemoryStructForIntegration *shmStru,sharedMemoryPointers *sharedPointers);
 int printShrdFemData(sharedMemoryStructForIntegration *shrdMemStruct, int bytesForPointer, int femBodyNumb);
+
+int waitForKnukleToFinish(sharedMemoryStructForIntegration *shmStru);
+int myPrintAngles(double *angles, double *angAcc, double *_globalPos);
 
 #endif

@@ -40,6 +40,8 @@ typedef struct {
 	double *materialProperties;
 	double *displacedNodesX;
 	double *displacedNodesY;
+	double *vonMieses;
+	double *deformation;
 } DOUBLES;
 
 
@@ -57,8 +59,13 @@ typedef struct {
 	int numMaterial;
 	int PlaneStressFlag;
 	int gravity_Flag;
+	int numBytesForFinalFemReciever;
+	int numBytesToSend;
 	char *allTheData;
+	char *finalFemDataToRecieve;
 } FEMDATATOSEND;
+
+
 
 typedef struct {
     int meshNumber;
@@ -72,6 +79,8 @@ int femReadMesh(FEMDATATOSEND *dataToSend, const char fileName[]);
 
 int calcFemDataSize(FEMDATATOSEND *dataToSend);
 
+int calcNumBytesToSend(FEMDATATOSEND *dataToSend);
+
 int qdInitialReader(FEMDATATOSEND *dataToSend, FILE *femDatFile);
 
 int qdClientMemory(FEMDATATOSEND *dataToSend);
@@ -83,6 +92,8 @@ int qdClientReader(FEMDATATOSEND *dataToSend,FILE *femDatFile);
 int qdClientInitialSender(FEMDATATOSEND *dataToSend,int sockfd);
 
 int qdClientSender(FEMDATATOSEND *dataToSend, int sockfd);
+
+int qdClientWriter( FEMDATATOSEND *dataToSave, const char name[]);
 
 int freeDataToSend(FEMDATATOSEND *dataToSend);
 

@@ -104,7 +104,15 @@ int globalPosForCrane::sendData( struct Frame Frames[4],struct SolutionVectors S
   doublesSent += SolutionVectors.maAndMom.firstDim;
   memcpy(dataToSend + SZ_DOUBLE*doublesSent,_globalPos,SZ_DOUBLE*3);
   doublesSent += 3;
-
+/*
+printf("----R1----\n");
+  printf("%lf, %lf, %lf\n",Frames[0].AbsR.R[0][0],Frames[0].AbsR.R[0][1],Frames[0].AbsR.R[0][2]);
+  printf("%lf, %lf, %lf\n",Frames[0].AbsR.R[1][0],Frames[0].AbsR.R[1][1],Frames[0].AbsR.R[1][2]);
+  printf("%lf, %lf, %lf\n",Frames[0].AbsR.R[2][0],Frames[0].AbsR.R[2][1],Frames[0].AbsR.R[2][2]);
+  printf("AngV: [%lf, %lf, %lf, %lf, %lf, %lf]\n",SolutionVectors.SolV.Vector[0],SolutionVectors.SolV.Vector[1],SolutionVectors.SolV.Vector[2],SolutionVectors.SolV.Vector[3],SolutionVectors.SolV.Vector[4],SolutionVectors.SolV.Vector[5]);
+  printf("AngAcc: [%lf, %lf, %lf, %lf, %lf, %lf]\n",AngularAccelerations.Vector[0],AngularAccelerations.Vector[1],AngularAccelerations.Vector[2],AngularAccelerations.Vector[3],AngularAccelerations.Vector[4],AngularAccelerations.Vector[5]);
+  printf("CraneGlobPos : [%lf, %lf, %lf]\n",_globalPos[0],_globalPos[1],_globalPos[2]);
+  */
   //dataToSend = [R1,th4,th5,th6,dth1,dth2,dth3,dth4,dth5,dth6,ddth1,ddth2,ddth3,ddth4,ddth5,ddth6,ma_and_mom, globCraneTipWantedPos];48 doubles;
   if(SendNUnsignedChar(_sockfd, dataToSend, _nCharsToSend ))
   {

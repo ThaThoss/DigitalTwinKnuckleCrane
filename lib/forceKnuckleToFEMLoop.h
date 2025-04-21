@@ -36,7 +36,7 @@ typedef struct{
     double momentZforFEM = 0;
     double gravityDirection[2] = {0};
 
-    double massTimesGravity = {0};
+    double massTimesGravity = 0;
 
     double forceArray[4][4] = {{1,0,1,0},//sum Fx
                                {0,1,0,1},//sum Fy
@@ -55,5 +55,7 @@ int distributeForceToMesh(sharedMemoryStructForIntegration *shrdMemStruct, share
 int getMassAccandMomZfromShm(sharedMemoryStructForIntegration *shrdMemStruct ,VALUESFORFORCECALC AllvaluesForForceCalc[], int numFEMBodies);
 
 int invMatVec(double leftSide[4], double rightSide[4]);
+
+int saveRBDValuesBefEnd(sharedMemoryStructForIntegration *shmStru, SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers, VALUESFORFORCECALC AllvaluesForForceCalc[], double *angles, double *accAng, double *craneGlobPos);
 
 #endif

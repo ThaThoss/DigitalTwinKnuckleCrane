@@ -64,12 +64,15 @@ int main(int argc, char *argv[]){
         int nFEMBodies = shmStru->numFEMBodies;
         int nRBDBodies = shmStru->numRBDbodies;
         int numBytesBefFEM = shmStru->numBytesBefFEM;
+        int numBytesFOrInitialANg = shmStru->bytesForInitialAng;
+        int axisOfRotation[nRBDBodies] = {0};
+        memcpy(axisOfRotation,shmStru->axisOfRotation,nRBDBodies*sizeof(int));
     sem_post(&(shmStru->semLock));
 
     int headers[nFEMBodies][8] = {0};
     getFEMHeaders( headers, shmStru,  nFEMBodies);
 
-    cout << "nFEMBodies Internal = "<< nFEMBodies << endl;
+    //cout << "nFEMBodies Internal = "<< nFEMBodies << endl;
     for(int i=0;i<nFEMBodies;i++){
         for(int j=0;j<8;j++){
             cout << headers[i][j] << " , ";
@@ -138,7 +141,9 @@ int main(int argc, char *argv[]){
     cout << "Internal loops up and running, internal server up and running" << endl;
     int gogo = isGogo(shmStru);
     int check = 0;
-    double *angles = (double*)calloc(12,sizeofDouble);
+    double *angles = (double*)calloc(numBytesFOrInitialANg/sizeofDouble,sizeofDouble);
+    double angAcc[6] = {0}; 
+    double craneGlobPos[3] = {0};
     double gravityDir[12] = {0};
    // cout << "In server Internal, be load on outer" << endl;fflush(stdout);
     double loadOnOuter = returnLoadOnOuter(shmStru);
@@ -192,30 +197,42 @@ int main(int argc, char *argv[]){
         }
     }
 
+    SHAREDMEMORYPOINTERSRBD shMemRBDPoint;
+    int semProtect = 1;
+    distributeRbdMemPointers( shmStru,&shMemRBDPoint, axisOfRotation, semProtect );
+
 
     //cout << "In server Internal, sem_post" << endl;fflush(stdout);
     for (int i = 0; i < nFEMBodies; i++) {
         sem_post(&semSyncGo);
     }
 
+    cout << "In com loop Internal, waiting for loops to finish" << endl;fflush(stdout);
+    for (int i = 0; i < nFEMBodies; i++) {
+        sem_wait(&semSyncWait);
+    }
+
+
     //cout << "In server Internal, while gogo" << gogo<<endl;fflush(stdout);
     while(gogo){
 
-        cout << "In com loop Internal, waiting for loops to finish" << endl;fflush(stdout);
-        for (int i = 0; i < nFEMBodies; i++) {
-            sem_wait(&semSyncWait);
-        }
         //cout << "In com loop Internal, done waiting, calc forces" << endl;
-
-        getAnglesFromSharedMem(shmStru, angles);
+        getAnglesFromSharedMem(shmStru, &shMemRBDPoint, angles, angAcc, craneGlobPos);
         calcGravityDirAndSave( shmStru, angles, gravityDir);
 
-        //cout << "In com loop Internal, get mass and FOrce " << endl;
+        //cout << "In com loop Internal, get mass and Force " << endl;
         check = getMassAccandMomZfromShm(shmStru, valuesForForceCalc, nFEMBodies);//acc and Mmm      
         check = getReactionForceAndSave(shmStru, valuesForForceCalc, nFEMBodies, nRBDBodies, gravityDir, loadOnOuter );
-      
-
-  
+/*
+        cout << "R1 = [ " << angles[0]<< ", " << angles[1]<< ", " << angles[2]<< endl;
+        cout << angles[3]<< ", " << angles[4]<< ", " << angles[5] << endl;
+        cout << angles[6]<< ", " << angles[7]<< ", "<< angles[8] << "]"<< endl;
+        cout << "ang+V = [ " << angles[9]<< ", "  << angles[10]<< ", " << angles[11]<< ", " << angles[12]<< ", "<< angles[13]<< ", " << angles[14]<< ", " << angles[15] << ", " << angles[16]<< ", " << angles[17]<<  "]"<< endl;
+        cout << "angAcc = [ " << angAcc[0]<< ", " << angAcc[1]<< ", " << angAcc[2]<< ", "<< angAcc[3]<< ", " << angAcc[4]<< ", " << angAcc[5] <<  "]"<< endl;
+            
+        printf("AngAcc: [%lf, %lf, %lf, %lf, %lf, %lf]\n",angAcc[0],angAcc[1],angAcc[2],angAcc[3],angAcc[4],angAcc[5]);
+        printf("CraneGlobPos : [%lf, %lf, %lf]\n",craneGlobPos[0],craneGlobPos[1],craneGlobPos[2]);
+  */  
         if(check){
             std::cout << "Error in getReactionForce, shutting down from forceKnuckleToFEMLoop" << std::endl;
             dontGogo( shmStru);
@@ -228,25 +245,61 @@ int main(int argc, char *argv[]){
             sem_post(&semSyncGo);
         }
 
+       // cout << "In com loop Internal, waiting for loops to finish" << endl;fflush(stdout);
+        for (int i = 0; i < nFEMBodies; i++) {
+            sem_wait(&semSyncWait);
+        }
+
         gogo = isGogo(shmStru);
     }
-    cout << "gogo in Internal was " << gogo << "shutting down" << endl;
 
-    free(angles);
+    dontGogo( shmStru);
+    cout << "gogo in Internal was " << gogo << " shutting down" << endl;
+    for (int i = 0; i < nFEMBodies; i++) {
+        sem_post(&semSyncGo);
+    }
 
     for(int i=0;i<nFEMBodies;i++){
         commThreadFEM[i]->join();
     }
 
-
     commThreadRBD.join();
     controllThread.join();
 
+    saveRBDValuesBefEnd(shmStru, &shMemRBDPoint,  valuesForForceCalc, angles, angAcc,craneGlobPos);
+    /*
+    cout << "Sending RBD Final data" << endl;
+    cout << "Final R1 = [ " << angles[0]<< ", " << angles[1]<< ", " << angles[2]<< endl;
+    cout << angles[3]<< ", " << angles[4]<< ", " << angles[5] <<endl;
+    cout << angles[6]<< ", " << angles[7]<< ", "<< angles[8] << "]"<< endl;
+    cout << "Final ang+V = [ " << angles[9]<< ", "  << angles[10]<< ", " << angles[11]<< ", " << angles[12]<< ", "<< angles[13]<< ", " << angles[14]<< ", " << angles[15] << ", " << angles[16]<< ", " << angles[17]<<  "]"<< endl;
+    cout << "Final angAcc = [ " << angAcc[0]<< ", " << angAcc[1]<< ", " << angAcc[2]<< ", "<< angAcc[3]<< ", " << angAcc[4]<< ", " << angAcc[5] <<  "]"<< endl;
+    printf("final CraneGlobPos : [%lf, %lf, %lf]\n",craneGlobPos[0],craneGlobPos[1],craneGlobPos[2]);
+    */
+    sem_wait(&(shmStru->semLock));
+    SendNChar(clientSocket,shMemRBDPoint.dataForRBD,shmStru->numBytesForRBD);
+    sem_post(&(shmStru->semLock));
 
-    shmStru->gogo = 0;
+    setForceGroups(shmStru,shmPointers);
+    for(int i=0; i<nFEMBodies; i++){
+        sleep(1);
+        cout << "Sending FEM Final data for body "<< i << endl;
+        SendNChar(clientSocket,shmPointers[i].finalFEMResultToSend,shmPointers[i].numBytesForFEMToSend);        
+    }
+
+    //send final values to controll, rbd, fem1 fem2 fem3
+    
+
+
+
+    free(angles);
+
+    
+
     shmdt(shmStru); 
     sem_destroy(&semSyncWait);
     sem_destroy(&semSyncGo);
+    close(clientSocket);
     cout << "threads joined, internal server shutting down" << endl;
     
 }

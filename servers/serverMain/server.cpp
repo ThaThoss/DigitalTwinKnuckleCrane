@@ -77,13 +77,15 @@ int main(int argc, char *argv[]){
     int numBytesForSharedMemory = 0;
     numBytesForSharedMemory += sizeof(sharedMemoryStructForIntegration);//Size of known sizes in struct
     numBytesForSharedMemory += sizeof(int)*8*nFEMBodies;// header for FEM files, 8 ints each;
-    int nBytesRBD = calcBytesNeededForRBD( nBodies[0], rotationalAxis);// bytes for RBD
+    int nBytesRBD = calcBytesNeededForRBD( nBodies[0],nBodies[1], rotationalAxis);// bytes for RBD
     numBytesForSharedMemory += nBytesRBD;
 
     for(int i=0;i<nFEMBodies;i++){
         numBytesForSharedMemory += calcBytesNeededForFEM( headersNew[i*8 + 0],  headersNew[i*8 + 1],  
                                     headersNew[i*8 + 2],  headersNew[i*8 + 3],  headersNew[i*8 + 4]);
     }
+
+    cout << "numBytesForSharedMemory = " << numBytesForSharedMemory << endl;
 
 
     /*Shared memory section:*/
@@ -93,7 +95,7 @@ int main(int argc, char *argv[]){
 
     // shmget returns an identifier in shmid
     int shmid = shmget(key,numBytesForSharedMemory,0644|IPC_CREAT);
-    cout<<"keyDT = " << key << ", numBytesForSharedMemory : " << numBytesForSharedMemory << endl;
+    //cout<<"keyDT = " << key << ", numBytesForSharedMemory : " << numBytesForSharedMemory << endl;
     if (shmid == -1) {
       perror("Shared memory shmget");
       return 1;
@@ -115,10 +117,12 @@ int main(int argc, char *argv[]){
 
     SHAREDMEMORYPOINTERSRBD sharedMemoryRBDPointers;
     int semProtect = 0;
+
+    shmStru->bytesForInitialAng = calcNumBytesForInitialAngRBD(rotationalAxis, nBodies[0]);
+  
+
     distributeRbdMemPointers( shmStru,&sharedMemoryRBDPointers, rotationalAxis, semProtect );
-    cout << "After distributeRbdMemPointers RBD data"<< endl;
-
-
+    
         memcpy(shmStru->R1,zerosForShm,SZ_DOUBLE*9);
         shmStru->R1[0] = 1.0;
         shmStru->R1[4] = 1.0;
@@ -173,8 +177,7 @@ int main(int argc, char *argv[]){
             cout << "numBytesToRecieve: " << numBytesForFEMBodie[i+1] << endl;
             bytesForPointer[i+1] = bytesForPointer[i] + calcBytesNeededForFEM( *(headersNew +i*8 + 0),  *(headersNew +i*8 + 1),  *(headersNew +i*8 + 2),  *(headersNew +i*8 + 3), *(headersNew +i*8 + 4));
             ReceiveNChars(clientSoc,(shmStru->sharedFEMData + bytesForPointer[i]), numBytesForFEMBodie[i+1]);
-            cout << "printing mesh"<< endl;
-            //printShrdFemData(shmStru, bytesForPointer[i], i);
+            cout << endl;
 
         }      
         cout << "done recieving mesh" <<endl;

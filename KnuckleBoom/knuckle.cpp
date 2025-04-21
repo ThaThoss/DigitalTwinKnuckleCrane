@@ -57,12 +57,15 @@ int main(int argc, char* argv[])
   int nBodies = 0;
   int rc = write(sockfd,"200",sizeof("200"));
   ReceiveInt32(sockfd,&nBodies);
+  printf("Recieved %d number of bodies", nBodies);
   int axisOfRotations[nBodies] = {0};
   sleep(1);
   ReceiveNInts(sockfd,axisOfRotations,nBodies*sizeof(int));
   int nBytesToRecive = calcBytesNeededForRBD( nBodies, axisOfRotations);
   char *initialData = (char *)calloc(nBytesToRecive,sizeof(char));
   ReceiveNChars(sockfd,initialData,nBytesToRecive);
+
+  printf("Recievced axis of rotation[%d, %d, %d , %d]",axisOfRotations[0],axisOfRotations[1],axisOfRotations[2],axisOfRotations[3]);
 
 
 
@@ -74,7 +77,7 @@ int main(int argc, char* argv[])
     myArrayData.numGenCoord = 6;
     myArrayData.numLocalSpace = 6;
     myArrayData.numCartesianDim = 21;
-    myArrayData.numBodies = 4;
+    myArrayData.numBodies = nBodies;
     myArrayData.dt = timestep;
     myArrayData.Axis[0] = 0;
     myArrayData.Axis[1] = 3;

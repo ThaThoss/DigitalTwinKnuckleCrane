@@ -201,7 +201,7 @@ int main(int argc, char** argv)
 	forceStruct.gogo = (int*)(forceStruct.buffer + (bc.num_force[0]*2+ndof)*sizeof(double));
 	*(forceStruct.gogo) = 42;
 
-	sleep(120);
+
 /* Receive the data from Client */ 
 	check =	qdServerReceiver(bc, connect, coord, el_matl, forceStruct, matl, U, &sizes, sockfd);
 
@@ -246,11 +246,12 @@ printf( " Bef  qdformid\n" );
 	printf("qdKassemble ended\n");
 
 
-	double *solutionVec, *vonMieses, *dataToSend;
-	int numBytesToSend = (dof+numnp)*sizeof(double);
-	dataToSend = (double *)calloc(numnp+dof,sizeof(double));
+	double *solutionVec, *vonMieses, *dataToSend, *forceToSend;
+	int numBytesToSend = (dof*2+numnp)*sizeof(double);
+	dataToSend = (double *)calloc(numnp+dof*2,sizeof(double));
 	solutionVec = (double *)calloc(neqn,sizeof(double));
 	vonMieses = (dataToSend+dof);
+	forceToSend = (dataToSend+dof+numnp);
 	double *inv = (double *)calloc(sofmA,sizeof(double));
 
 	printf("reading Inverse from file...");
@@ -305,6 +306,7 @@ printf("Starting qdKassmembleStress\n");
 	//first run with gravity straight down.
 
 	memcpy(dataToSend,U,dof*sizeof(double));//U has predefined dispacements, carefull if non 0;
+	memcpy(forceToSend,force,dof*sizeOfDouble);
 
 
 
@@ -317,9 +319,9 @@ printf("Starting qdKassmembleStress\n");
 		}
 
 		//recieve force
-		printf("Requesting Force Result \n");
+		//printf("Requesting Force Result \n");
 		gogo = recieveForce( bc, forceStruct, sockfd);
-		printf("Recieved force, gravity x,y = [%lf , %lf] \n", *(forceStruct.gravity_X),*(forceStruct.gravity_Y));
+		//printf("Recieved force, gravity x,y = [%lf , %lf] \n", *(forceStruct.gravity_X),*(forceStruct.gravity_Y));
 
 		//calculate force
 		qdCalcForce(force, tempForce, nodalMass, bc, &forceStruct, id);
@@ -343,6 +345,7 @@ printf("Starting qdKassmembleStress\n");
 				counter++;	
 			}
 		}
+		memcpy(forceToSend,force,dof*sizeOfDouble);
 
 		//calculate von mieses, vonMieses pointer already pointing to dataTosend
 		memset(stress, 0, sofmSTRESS*sizeof(STRESS));

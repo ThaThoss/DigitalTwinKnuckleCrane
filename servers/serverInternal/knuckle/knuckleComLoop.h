@@ -11,4 +11,5 @@
 
 
 void knuckleComLoop(int shmid, int knucklePort, char knuckleIp[16]);
+int calcBytesNeededForRBD(int nBodies, int axisOfRotation[]);
 

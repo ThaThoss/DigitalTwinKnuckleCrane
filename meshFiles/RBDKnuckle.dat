@@ -23,9 +23,9 @@ Inertia
 0.9843 0.0 0.0 0.0 0.6945 0.0689 0.0 0.0689 1.007
 0.475 0.0 0.0161 0.0 5.914 0.0 0.0161 0.0 5.757
 0.425 0.0 0.57 0.0 1.688 0.0 0.57 0.0 1.787
-initial values R1, omg1, ang, angV
+initial angular values R1, ang, angV
 1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-initial translation, initial velocity
+initial translation initial velocity
 0.0 0.0 0.0 0.0 0.0 0.0 
 0.0 0.0 0.0 0.0 0.0 0.0 
 0.0 0.0 0.0 0.0 0.0 0.0 

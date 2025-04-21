@@ -10,35 +10,62 @@
 #include "./forceKnuckleToFEMLoop.h"
 
 
-int calcBytesNeededForRBD(int nBodies, int axisOfRotation[]){
-
-	int bytesForInitialAng = 0;
-    for(int i=0; i<nBodies;i++){
-        if(axisOfRotation[i]==4){
-            bytesForInitialAng += 12;
-        }else if(axisOfRotation[i]>4 || axisOfRotation[i]<0){
-            std::cout << "invalid rotational axis, axis was: "<< axisOfRotation[i] << ", for body number " << i << std::endl;
-            return 1;
-            
-        }else{
-            bytesForInitialAng += 2;
-        }
-    }
-    std::cout << "numDoubles for Ang = "<< bytesForInitialAng << std::endl;
+int calcBytesNeededForRBD(int nRbdBodies,int nFemBodies, int axisOfRotation[]){
 
 	//ints
-	int bytesSpatFree = nBodies*3*sizeof(int);
-	int bytesForAxisOfRotation = nBodies*sizeof(int);
+	int bytesSpatFree = nRbdBodies*3*sizeof(int);
+	int bytesForAxisOfRotation = nRbdBodies*sizeof(int);
 	//doubles
-	int bytesForCmPos = nBodies*3*2*sizeof(double);
-	int bytesForMass = nBodies*sizeof(double);
-	int bytesForInertia = nBodies*9*sizeof(double);
-	int bytesForInitialTransl = nBodies*6*sizeof(double);
-	bytesForInitialAng = bytesForInitialAng*sizeof(double);
+	int bytesForCmPos = nRbdBodies*3*2*sizeof(double);
+	int bytesForMass = nRbdBodies*sizeof(double);
+	int bytesForInertia = nRbdBodies*9*sizeof(double);
+	int bytesForInitialTransl = nRbdBodies*6*sizeof(double);
+	
+	int bytesForMassTimesAcc = 21*sizeof(double);
+	int bytesForCraneGlobalPos = 3*sizeof(double);
+	int bytesForAppliedLoads = 4*nFemBodies*sizeof(double);
+	int bytesForInitialAng = calcNumBytesForInitialAngRBD( axisOfRotation, nRbdBodies);
+	int numAngl = calcNumAngAccForRBD(axisOfRotation, nRbdBodies);
+	int bytesForAngAcc = numAngl*sizeof(double);
 
-	int numBytes =  bytesSpatFree + bytesForAxisOfRotation + (bytesForCmPos + bytesForMass + bytesForInertia + bytesForInitialTransl + bytesForInitialAng);
+	int numBytes =  bytesSpatFree + bytesForAxisOfRotation + (bytesForCmPos + bytesForMass + 
+		bytesForInertia + bytesForInitialTransl + bytesForInitialAng + bytesForAngAcc + 
+		bytesForMassTimesAcc + bytesForAppliedLoads + bytesForCraneGlobalPos);
 
 	return numBytes;
+
+}
+
+int calcNumBytesForInitialAngRBD(int rotationalAxis[],int nBodies){
+	int bytesForInitialAng = 0;
+	for(int i=0; i<nBodies;i++){
+		if(rotationalAxis[i]==4){
+			bytesForInitialAng += 12;
+		}else if(rotationalAxis[i]>4 || rotationalAxis[i]<0){
+			std::cout << "invalid rotational axis, axis was: "<< rotationalAxis[i] << ", for body number " << i << std::endl;
+			return -1;
+			
+		}else{
+			bytesForInitialAng += 2;
+		}
+	}
+	return bytesForInitialAng*sizeof(double);
+}
+
+int calcNumAngAccForRBD(int rotationalAxis[], int nBodies){
+	int numAngl = 0;
+	for(int i=0; i<nBodies;i++){
+		if(rotationalAxis[i]==4){
+			numAngl += 3;
+		}else if(rotationalAxis[i]>4 || rotationalAxis[i]<0){
+			std::cout << "invalid rotational axis, axis was: "<< rotationalAxis[i] << ", for body number " << i << std::endl;
+			return -1;
+			
+		}else{
+			numAngl += 1;
+		}
+	}
+return numAngl;
 
 }
 
@@ -141,14 +168,11 @@ sem_wait(&(shrdMemStruct->semLock));
 
 
 	//Jump to the start of this bodies data, data is ordered with doubles first, then ints. Then solution data
+	
 	//Nodal coordinates
 	sharedMemoryCounter = bytesForPointer;
 	sharedPointers->nodes = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += numNodes*numSpatialDim*sizeofDouble;//nodal points is the second int in header
-
-	//Force vectors:
-	sharedPointers->forceVectors = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += numSpatialDim*(numNodes)*sizeofDouble;
 
 	// Material properties;
 	sharedPointers->mat_E_Poiss_Mass = (double*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter );
@@ -172,14 +196,6 @@ sem_wait(&(shrdMemStruct->semLock));
 	sharedPointers->elementalMaterialNumber = (int*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += numberOfElements*sizeof(int);//first int in header is number of elements
 
-	//Nodes with force: 
-	sharedPointers->forceNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes+1)*sizeof(int);
-
-	//Force nodes group number:
-	sharedPointers->forceGroup = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes)*sizeof(int);
-
 	//prescribed displacement x: 
   	sharedPointers->xLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += (numNodes+1)*sizeof(int);
@@ -188,24 +204,48 @@ sem_wait(&(shrdMemStruct->semLock));
   	sharedPointers->yLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += (numNodes+1)*sizeof(int);
 
+
+
+	//Results to send:
+	sharedPointers->finalFEMResultToSend = (shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	
+	//Force nodes group number:
+	sharedPointers->forceGroup = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes)*sizeof(int);
+	sharedPointers->numBytesForFEMToSend += (numNodes)*sizeof(int);
+
+	//Force vectors:
+	sharedPointers->forceVectors = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += numSpatialDim*(numNodes)*sizeofDouble;
+	sharedPointers->numBytesForFEMToSend += numSpatialDim*(numNodes)*sizeofDouble;
+
+	//Nodes with force: 
+	sharedPointers->forceNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeof(int);
+	sharedPointers->numBytesForFEMToSend += (numNodes+1)*sizeof(int);
+
 	//Resulting Nodal coordinates, deformed mesh
 	sharedPointers->deformedNodes = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += numNodes*numSpatialDim*sizeofDouble;//nodal points is the second int in header
+	sharedPointers->numBytesForFEMToSend += numNodes*numSpatialDim*sizeofDouble;
 
 	//Resulting von Mieses stress
 	sharedPointers->vonMieses = (double*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += numNodes*sizeof(double);//first int in header is number of elements
+	sharedPointers->numBytesForFEMToSend += numNodes*sizeofDouble;
 sem_post(&(shrdMemStruct->semLock));
 	return 0;
 }
 int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers, int *rotationalAxis, int semProtect ){
 
 	int dataCounter = 0;
-	printf("waiting for sem");
+
 	if(semProtect){
 		sem_wait(&(shrdMemStruct->semLock));
 	}
+
 	int nBodies = shrdMemStruct->numRBDbodies;
+	int nFemBodies = shrdMemStruct->numFEMBodies;
 	sharedMemoryRBDPointers->dataForRBD = (shrdMemStruct->sharedFEMData + shrdMemStruct->numBytesForHeader);
 	sharedMemoryRBDPointers->axisOfRotation = (int *)sharedMemoryRBDPointers->dataForRBD; 
 	dataCounter += nBodies*sizeof(int);
@@ -223,19 +263,68 @@ int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHA
 	sharedMemoryRBDPointers->inertia = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
 	dataCounter += nBodies*9*sizeof(double);
 
-	int bytesForInitialAng = 0;
-    for(int i=0; i<nBodies;i++){
-        if(rotationalAxis[i]==4){
-            bytesForInitialAng += 12;
-        }else if(rotationalAxis[i]>4 || rotationalAxis[i]<0){
-            std::cout << "invalid rotational axis, axis was: "<< rotationalAxis[i] << ", for body number " << i << std::endl;
-            return 1;
-            
-        }else{
-            bytesForInitialAng += 2;
-        }
-    }
+	int bytesForInitialAng = calcNumBytesForInitialAngRBD( rotationalAxis, nBodies);
 
+	int numAng = calcNumAngAccForRBD(rotationalAxis, nBodies);
+
+	shrdMemStruct->numAngles = numAng;
+
+	sharedMemoryRBDPointers->initialAngularValues = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += bytesForInitialAng;
+
+	sharedMemoryRBDPointers->initialTranslationalValues = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*6*sizeof(double);
+
+	// Results:
+	sharedMemoryRBDPointers->angAcc = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += numAng*sizeof(double);
+
+	sharedMemoryRBDPointers->massTimesAcc = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += 21*sizeof(double);//nBodies*6 -3, Size of dX vectors in RBD. -3 as ship is not moving
+
+	sharedMemoryRBDPointers->craneGlobalPos = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += 3*sizeof(double);
+
+	sharedMemoryRBDPointers->appliedLoads = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += 4*nFemBodies*sizeof(double);
+
+
+	if(semProtect){
+		sem_post(&(shrdMemStruct->semLock));
+	}
+	return 0;
+}
+
+int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers ){
+
+	int dataCounter = 0;
+	
+		sem_wait(&(shrdMemStruct->semLock));
+
+
+	int nBodies = shrdMemStruct->numRBDbodies;
+	int nFemBodies = shrdMemStruct->numFEMBodies;
+	sharedMemoryRBDPointers->dataForRBD = (shrdMemStruct->sharedFEMData + shrdMemStruct->numBytesForHeader);
+	sharedMemoryRBDPointers->axisOfRotation = (int *)sharedMemoryRBDPointers->dataForRBD; 
+	dataCounter += nBodies*sizeof(int);
+
+	sharedMemoryRBDPointers->spatialFreedom = (int *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*3*sizeof(int);
+
+	sharedMemoryRBDPointers->cogCoords = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*2*3*sizeof(double);
+
+
+	sharedMemoryRBDPointers->mass = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*sizeof(double);
+
+	sharedMemoryRBDPointers->inertia = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += nBodies*9*sizeof(double);
+
+	int bytesForInitialAng = calcNumBytesForInitialAngRBD( sharedMemoryRBDPointers->axisOfRotation, nBodies);
+
+	int numAng = calcNumAngAccForRBD(sharedMemoryRBDPointers->axisOfRotation, nBodies);
+	shrdMemStruct->numAngles = numAng;
 
 	sharedMemoryRBDPointers->initialAngularValues = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
 	dataCounter += bytesForInitialAng*sizeof(double);
@@ -243,9 +332,23 @@ int distributeRbdMemPointers(sharedMemoryStructForIntegration *shrdMemStruct,SHA
 	sharedMemoryRBDPointers->initialTranslationalValues = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
 	dataCounter += nBodies*6*sizeof(double);
 
-	if(semProtect){
-		sem_post(&(shrdMemStruct->semLock));
-	}
+	// Results:
+	sharedMemoryRBDPointers->angAcc = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += numAng*sizeof(double);
+
+	sharedMemoryRBDPointers->massTimesAcc = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += 21*sizeof(double);//nBodies*6 -3, Size of dX vectors in RBD. -3 as ship is not moving
+
+	sharedMemoryRBDPointers->craneGlobalPos = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += 3*sizeof(double);
+
+	sharedMemoryRBDPointers->appliedLoads = (double *)(sharedMemoryRBDPointers->dataForRBD + dataCounter);
+	dataCounter += 4*nFemBodies*sizeof(double);
+
+
+	
+	sem_post(&(shrdMemStruct->semLock));
+
 	return 0;
 }
 
@@ -371,7 +474,14 @@ int saveVonMiesesToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruct,
 	return 0;
 }
 
+int saveForceResultToSharedMemory(sharedMemoryStructForIntegration *shrdMemStruct, FEMDATATOSEND *femData, sharedMemoryPointers *sharedPointers, double* force){
 
+	sem_wait(&(shrdMemStruct->semLock));
+		memcpy(sharedPointers->forceVectors,force,femData->degOfFreedom*sizeofDouble);
+	sem_post(&(shrdMemStruct->semLock));
+
+	return 0;
+}
 
 
 
@@ -403,7 +513,7 @@ int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, doubl
 	int anglesCounter = 0;
 	double *R = angles;
 	double cs,si;
-	std::cout << "axisDir from internal calcGravity... = ["<<axisDir[0] << " , "<<axisDir[1] << " , " << axisDir[2] << " , " << axisDir[3] << std::endl;
+	//std::cout << "axisDir from internal calcGravity... = ["<<axisDir[0] << " , "<<axisDir[1] << " , " << axisDir[2] << " , " << axisDir[3] << std::endl;
 
 	for(int i=0;i<numRBDBodies;i++){
 
@@ -463,10 +573,11 @@ int calcGravityDirAndSave(sharedMemoryStructForIntegration *shrdMemStruct, doubl
 	return 0;
 }
 
-int getAnglesFromSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, double *angles){
+int getAnglesFromSharedMem(sharedMemoryStructForIntegration *shrdMemStruct, SHAREDMEMORYPOINTERSRBD *sharedMemoryRBDPointers, double *angles, double *angAcc, double *craneGlobPos){
 	sem_wait(&(shrdMemStruct->semLock));
-		memcpy(angles,shrdMemStruct->R1,9*sizeofDouble);
-		memcpy((angles+9),shrdMemStruct->angles,3*sizeofDouble);
+		memcpy(angles,sharedMemoryRBDPointers->initialAngularValues,shrdMemStruct->bytesForInitialAng);
+		memcpy(angAcc,sharedMemoryRBDPointers->angAcc,shrdMemStruct->numAngles*sizeof(double));
+		memcpy(craneGlobPos,sharedMemoryRBDPointers->craneGlobalPos,3*sizeof(double));
 	sem_post(&(shrdMemStruct->semLock));
 
 
@@ -539,9 +650,6 @@ int printShrdFemData(sharedMemoryStructForIntegration *shrdMemStruct, int bytesF
 
 	}printf("\n\n\n");
 	sharedMemoryCounter += numNodes*numSpatialDim*sizeofDouble;//nodal points is the second int in header
-		//Force vectors:
-		//sharedPointers->forceVectors = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-		sharedMemoryCounter += (numNodes)*sizeofDouble*numSpatialDim;
 	
 		// Material properties;
 		//sharedPointers->mat_E_Poiss_Mass = (double*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter );
@@ -568,14 +676,6 @@ int printShrdFemData(sharedMemoryStructForIntegration *shrdMemStruct, int bytesF
 	sharedPointers->elementalMaterialNumber = (int*)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += numberOfElements*sizeof(int);//first int in header is number of elements
 
-	//Nodes with force: 
-	sharedPointers->forceNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes+1)*sizeof(int);
-
-	//Force nodes group number:
-	sharedPointers->forceGroup = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
-	sharedMemoryCounter += (numNodes)*sizeof(int);
-
 	//prescribed displacement x: 
   	sharedPointers->xLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += (numNodes+1)*sizeof(int);
@@ -583,10 +683,72 @@ int printShrdFemData(sharedMemoryStructForIntegration *shrdMemStruct, int bytesF
 	//prescribed displacement y: 
   	sharedPointers->yLocedNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
 	sharedMemoryCounter += (numNodes+1)*sizeof(int);
+
+	//Force nodes group number:
+	sharedPointers->forceGroup = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes)*sizeof(int);
+
+	//Force vectors:
+	//sharedPointers->forceVectors = (double *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes)*sizeofDouble*numSpatialDim;
+
+	//Nodes with force: 
+	sharedPointers->forceNodes = (int *)(shrdMemStruct->sharedFEMData + sharedMemoryCounter);
+	sharedMemoryCounter += (numNodes+1)*sizeof(int);
+
 */
 
 
 
 	sem_post(&(shrdMemStruct->semLock));
 	return 0;
+}
+int setForceGroups(sharedMemoryStructForIntegration *shmStru,sharedMemoryPointers *allSharedPointers){
+
+	int numNodes = 0;
+	int numForce = 0;
+	int setTo = -1;
+
+	for(int i=0; i<shmStru->numFEMBodies;i++){
+		numNodes = allSharedPointers[i].header[1];
+		numForce = allSharedPointers[i].header[7];
+		int forceGroups[numForce] = {0};
+		memcpy(forceGroups,allSharedPointers[i].forceGroup,numForce*sizeof(int));
+		memset(allSharedPointers[i].forceGroup,setTo,numNodes*sizeof(int));
+		for(int j=0;j<numForce;j++){
+			*(allSharedPointers[i].forceGroup + allSharedPointers[i].forceNodes[j] ) = forceGroups[j];
+		}
+	}
+
+	return 0;
+}
+
+int waitForKnukleToFinish(sharedMemoryStructForIntegration *shmStru){
+	sem_wait(&shmStru->semLock);
+    int knuckleRunning = shmStru->isKnuckleRunning;
+    sem_post(&shmStru->semLock);
+
+    while(knuckleRunning){
+        sleep(1);
+        sem_wait(&shmStru->semLock);
+        knuckleRunning = shmStru->isKnuckleRunning;
+        sem_post(&shmStru->semLock);
+
+    }
+	return 0;
+}
+
+int myPrintAngles(double *angles, double *angAcc, double *_globalPos){
+
+  printf("----R1----\n");
+  printf("%lf, %lf, %lf\n",angles[0],angles[1],angles[2]);
+  printf("%lf, %lf, %lf\n",angles[3],angles[4],angles[5]);
+  printf("%lf, %lf, %lf\n",angles[6],angles[7],angles[8]);
+  printf("Ang: [%lf, %lf, %lf, %lf, %lf, %lf]\n",angles[9],angles[10],angles[11]);
+  printf("AngV: [%lf, %lf, %lf, %lf, %lf, %lf]\n",angles[12],angles[13],angles[14],angles[15],angles[16],angles[17]);
+  printf("AngAcc: [%lf, %lf, %lf, %lf, %lf, %lf]\n",angAcc[0],angAcc[1],angAcc[2],angAcc[3],angAcc[4],angAcc[5]);
+  printf("CraneGlobPos : [%lf, %lf, %lf]\n",_globalPos[0],_globalPos[1],_globalPos[2]);
+
+  return 0;
+
 }

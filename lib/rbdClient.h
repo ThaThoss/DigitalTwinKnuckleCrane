@@ -32,6 +32,10 @@ typedef struct{
     double *inertia;
     double *initialAngularValues;
     double *initialTranslationalValues;
+    double *angularAcc;
+    double *massTimesAcc;
+    double *craneGlobalPos;
+    double *appliedLoads;
 
     char *data;
 
@@ -44,5 +48,7 @@ int readRBDdata(RBDDATATOSEND *dataToSend, const char fileName[]);
 int rbdGetMemoryAndSetPointers(RBDDATATOSEND *dataToSend, int axisOfRotation[]);
 
 int readRBDfile(RBDDATATOSEND *dataToSend, FILE *filePointer);
+
+int saveRBDdataToFile(RBDDATATOSEND *dataToSend, const char fileName[],int nFEMBodies);
 
 int freeRbdMemory(RBDDATATOSEND *dataToSend);

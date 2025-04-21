@@ -48,48 +48,14 @@ void femComLoop(int femBodyNumber, int bytesForPointer,int shmid, char femIp[16]
     if (shmStru == (void *) -1) {
       perror("Shared memory attach");
     }
-
-	printf("filename = %s\n",name);
-	femDatFile = fopen(name,"r");
-	if(femDatFile == NULL){
-		printf("Can't find file %30s\n",name);
-		exit(1);
-	}
-
 	printf("Attached shared memory from thread %d\n",femBodyNumber);
-	//check = qdInitialReader(&dataToSend,femDatFile);
-	
+
+
 	 //numel numnp nmat plane_stress_flag, gravity_flag
 	check = getFEMHeader( &dataToSend, shmStru, femBodyNumber);
 
-    cout << "numEl "<<dataToSend.numEl<<" numNodPnt "<<dataToSend.numNodPnt<<" numMaterial "<<dataToSend.numMaterial<<" PlaneStressFlag "<<dataToSend.PlaneStressFlag<<" gravity_Flag "<<dataToSend.gravity_Flag<<endl;
-	cout << "numFixX "<< dataToSend.numFixx<<" numFixY "<<dataToSend.numFixy<<" numForce "<< dataToSend.numForce<<endl;
-
-	printf("Calculating sizes\n");
 	int numBytes = calcFemDataSize(&dataToSend);
-	/*
-	dataToSend.degOfFreedom = dataToSend.numNodPnt*numDegOfFreedom;
-
-
-
 	
-	 Size of memory needed for the doubles 
-	dubSizeForce = dataToSend.degOfFreedom;
-	dubSizeCoord = dataToSend.numNodPnt*numSpatialDim;
-	dubSizeMatProp = 3*dataToSend.numMaterial;
-	dubSizeDisplacedNodes = 2*dataToSend.numNodPnt + 2;
-	dataToSend.sizeOfMemDoubles = dubSizeForce + 
-			dubSizeCoord + dubSizeDisplacedNodes +dubSizeMatProp;*/
-
-	/* Size of memory needed for the integers 
-	intSizeConnect = dataToSend.numEl*nodesPerElement;
-	intSizeElementalMaterial = dataToSend.numEl;
-	intSizeFixedNodes = 2*dataToSend.numNodPnt+2;
-	intSizePreForce = dataToSend.numNodPnt*2+1; // *2 for group number----------------------------------------	
-	dataToSend.sizeOfMemIntegers = intSizeConnect+intSizeElementalMaterial + 
-				       intSizeFixedNodes+intSizePreForce;*/
-
-		
 
 	check = qdClientMemory(&dataToSend);
 
@@ -103,19 +69,10 @@ void femComLoop(int femBodyNumber, int bytesForPointer,int shmid, char femIp[16]
 	
 	check = getFemData( shmStru, &dataToSend, &sharedPointers, femBodyNumber );
 
-
-/*
-sem_wait(&(shmStru->semLock));
-	cout << "Number of force nodes: " << dataToSend.numForce << endl;
-	cout << "Force Node Number,   Group number  " << endl;
-	for(int i=0; i< dataToSend.numForce; i++ ){
-		cout << *(sharedPointers.forceNodes+i) << "   " <<  *(sharedPointers.forceGroup +i) << endl;
-	}
-sem_post(&(shmStru->semLock));
-*/
+	//printShrdFemData( shmStru, bytesForPointer,  femBodyNumber);
 
 
-	int numBytesToRecieve = (dataToSend.degOfFreedom +dataToSend.numNodPnt)*sizeof(double);
+	int numBytesToRecieve = (dataToSend.degOfFreedom*2 +dataToSend.numNodPnt)*sizeof(double);
 	double *dataToReceive = (double* )calloc(numBytesToRecieve,sizeofDouble);
 		if(dataToReceive==NULL){
 		printf("Calloc failed for dataToReceive for Send in femComLoop numb %d", femBodyNumber);
@@ -124,6 +81,7 @@ sem_post(&(shmStru->semLock));
 
 	double *nodalDeformation = dataToReceive;
 	double *vonMieses = (dataToReceive + dataToSend.degOfFreedom);
+	double *forceResult = (dataToReceive + dataToSend.degOfFreedom + dataToSend.numNodPnt);
 
 	
 	check =	saveDeformationToSharedMemory( shmStru,  &dataToSend,  &sharedPointers, nodalDeformation);
@@ -196,10 +154,10 @@ sem_post(&(shmStru->semLock));
 		//printf("-----------Waiting to recieve-------------\n");
 		ReceiveNChars( sockfd, (char*)dataToReceive, numBytesToRecieve);
 
-		count++;
+		//count++;
         // Signal completion to controll thread
         sem_post(semSyncWait);
-        printf("Fem loop %d: Finished work, waiting...\n", femBodyNumber);
+        //printf("Fem loop %d: Finished work, waiting...\n", femBodyNumber);
 
         // Wait for reset
         sem_wait(semSyncGo);
@@ -217,7 +175,9 @@ sem_post(&(shmStru->semLock));
 		
 		
 	}
-
+	saveForceResultToSharedMemory( shmStru,  &dataToSend, &sharedPointers, forceResult);
+	//To avoid deadlock open semaphore just in case.
+	sem_post(semSyncWait);
 	free(dataToReceive);
 	free(dataBufferForSend);
 	shmdt(shmStru);

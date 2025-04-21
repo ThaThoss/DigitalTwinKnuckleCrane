@@ -11,8 +11,10 @@
 void xBoxComLoop(int clientSocket, sharedMemoryStructForIntegration *shmStru ){
 
     int16_t gogo = true;
+    int gogoToSend = 0;
     int xBoxSocket = clientSocket;
     unsigned char *dataToRecieve = (unsigned char*)malloc(knuckleNBytesToKnu);
+
     write(clientSocket,"gogo",sizeof("gogo"));
     while(gogo){
 
@@ -24,10 +26,22 @@ void xBoxComLoop(int clientSocket, sharedMemoryStructForIntegration *shmStru ){
 
         sem_wait(&(shmStru->semLock));
             memcpy(shmStru->dataForKnuckle,dataToRecieve,knuckleNBytesToKnu);
-            shmStru->gogo = gogo;
+            if(shmStru->gogo){
+                gogoToSend = 1;
+            }else{
+                gogoToSend = 0;
+            }
             shmStru->newData = 1;
         sem_post(&(shmStru->semLock));
+        SendInt32(xBoxSocket,gogoToSend);
 
     }
-    std::cout << "xBoxComLoop recieved gogo 0, shutting down..." << std::endl;
+    sem_wait(&(shmStru->semLock));
+        shmStru->gogo = 0;
+    sem_post(&(shmStru->semLock));
+
+    std::cout << "xBoxComLoop recieved gogo 0, shutting down." << std::endl;
+
+
+
 }

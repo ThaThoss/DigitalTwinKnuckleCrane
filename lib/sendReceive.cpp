@@ -91,7 +91,7 @@ int ReceiveNChars(int sockfd, char* dataToReceive, int numChars){
 			left -= rc;
 		}
 	}while(left>0);
-	printf("recieved %d bytes\n",recieved);
+	//printf("ReceiveNChars recieved %d bytes\n",recieved);
 	return 0;
 }
 
@@ -121,7 +121,7 @@ int ReceiveInt32(int sockfd, int *returnValue){
 		}
 	}while(left>0);
 	*returnValue = (int)ntohl(ret);
-	//printf("Received the int %d\n",*returnValue);
+	//printf("Received the int32 %d\n",*returnValue);
 	return 0;
 }
 
@@ -221,6 +221,9 @@ int ReceiveNUnsignedChars(int sockfd, unsigned char* charsToReceive, int numChar
 		}
 	}while(left>0);
 	//printf("ReceiveNUnsignedChars got %d bytes\n",recieved);
+	if(recieved==0){
+		return 1;
+	}
 	return 0;
 
 }
@@ -333,14 +336,14 @@ int SendNChar(int sockfd, char* charToSend, int numbOfChars ){
 		rc = write(sockfd, charToSend, left);
 		sent += rc;
 		if(rc<0){
-			printf("something wrong with SendNUnsignedChar");
+			printf("write failed in SendNChar, rc was %d",rc);
 			return -1;
 		}else{
 			charToSend += rc;
 			left -= rc;
 		}
 	}while(left > 0);
-	printf("sent %d bytes\n", sent);
+	//printf("sent %d bytes\n", sent);
 	return 0;
 }
 
@@ -354,7 +357,7 @@ int SendNInts(int sockfd, int *IntsToSend, int size){
 	char buffer[6];
 	rc = read(sockfd, buffer,5);
 	check = strncmp(buffer,"ready",5);
-	printf("SendNInts got %s, from server\n",buffer);
+	//printf("SendNInts got %s, from server\n",buffer);
 	if(check ==0){
 	do{
 		rc = write(sockfd, data, left);

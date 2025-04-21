@@ -43,7 +43,6 @@ std::vector<FEMFILE> findFemFiles(const std::string& folderPath, const std::stri
 int femReadMesh(FEMDATATOSEND *dataToSend, const char fileName[]){
 	using namespace std;
 	
-	int check = 0;
 	FILE *femDatFile = {0};
 	femDatFile = fopen(fileName,"r");
 	if(femDatFile == NULL){
@@ -51,16 +50,16 @@ int femReadMesh(FEMDATATOSEND *dataToSend, const char fileName[]){
 		exit(1);
 	}
 
-	check = qdInitialReader(dataToSend,femDatFile);
+	qdInitialReader(dataToSend,femDatFile);
 	cout << "numEl "<<dataToSend->numEl<<" numNodPnt "<<dataToSend->numNodPnt<<" numMaterial "<<dataToSend->numMaterial<<" PlaneStressFlag "<<dataToSend->PlaneStressFlag<<" gravity_Flag "<<dataToSend->gravity_Flag<<endl;
 	
-	int numBytes = calcFemDataSize(dataToSend);
+	calcFemDataSize(dataToSend);
 
-	check = qdClientMemory(dataToSend);
+	qdClientMemory(dataToSend);
 
-	check = qdClientDistributePointers(dataToSend);
+	qdClientDistributePointers(dataToSend);
 
-	check = qdClientReader(dataToSend, femDatFile);
+	qdClientReader(dataToSend, femDatFile);
 
 	fclose(femDatFile);
 
@@ -76,8 +75,10 @@ int calcFemDataSize(FEMDATATOSEND *dataToSend){
 	int dubSizeCoord = dataToSend->numNodPnt*numSpatialDim;
 	int dubSizeMatProp = 3*dataToSend->numMaterial;
 	int dubSizeDisplacedNodes = 2*dataToSend->numNodPnt + 2;
+	int dubSizeDiplacementResult = 2*dataToSend->numNodPnt;
+	int dubSizeVonMieses = dataToSend->numNodPnt;
 	dataToSend->sizeOfMemDoubles = dubSizeForce + 
-			dubSizeCoord + dubSizeDisplacedNodes +dubSizeMatProp;
+			dubSizeCoord + dubSizeDisplacedNodes +dubSizeMatProp +dubSizeDiplacementResult+dubSizeVonMieses;
 
 	/* Size of memory needed for the integers */
 	int intSizeConnect = dataToSend->numEl*nodesPerElement;
@@ -87,7 +88,42 @@ int calcFemDataSize(FEMDATATOSEND *dataToSend){
 	dataToSend->sizeOfMemIntegers = intSizeConnect+intSizeElementalMaterial + 
 				       intSizeFixedNodes+intSizePreForce;
 
+	dataToSend->numBytesForFinalFemReciever = (dubSizeForce + dubSizeDiplacementResult + dubSizeVonMieses)*sizeof(double) + intSizePreForce*sizeof(int);
+
+	calcNumBytesToSend(dataToSend);
+
 	return dataToSend->sizeOfMemIntegers + dataToSend->sizeOfMemDoubles;
+
+}
+
+int calcNumBytesToSend(FEMDATATOSEND *dataToSend){
+
+    int numEl = dataToSend->numEl;
+    int numNodPnt = dataToSend->numNodPnt;
+    int numMaterial = dataToSend->numMaterial;
+	int degOfFreedom = numNodPnt*2;//numNodPnt*numDegOfFreedom;
+
+	/* Size of memory needed for the doubles */
+	int dubSizeForce = degOfFreedom;
+	int dubSizeCoord = numNodPnt*numSpatialDim;
+	int dubSizeMatProp = 3*numMaterial;
+	int dubSizeDisplacedNodes = 2*numNodPnt + 2;
+	int sizeOfMemDoubles = dubSizeForce + 
+			dubSizeCoord + dubSizeDisplacedNodes +dubSizeMatProp;
+
+	/* Size of memory needed for the integers */
+	int intSizeConnect = numEl*nodesPerElement;
+	int intSizeElementalMaterial = numEl;
+	int intSizeFixedNodes = 2*numNodPnt+2;
+	int intSizePreForce = numNodPnt*2+1; // *2 for group number----------------------------------------	
+	int sizeOfMemIntegers = intSizeConnect+intSizeElementalMaterial + 
+				       intSizeFixedNodes+intSizePreForce;
+
+	dataToSend->numBytesToSend = sizeOfMemIntegers*sizeof(int) + sizeOfMemDoubles*sizeof(double);
+
+	return sizeOfMemIntegers*sizeof(int) + sizeOfMemDoubles*sizeof(double);
+
+
 
 }
 
@@ -134,40 +170,56 @@ int qdClientDistributePointers(FEMDATATOSEND *dataToSend){
 
 	int memCounter = 0;
 /* Doubles */
-	dataToSend->doubles.coord=dataToSend->doubles.allTheDoubles + memCounter;
-	memCounter += dataToSend->numNodPnt * numSpatialDim;
+	dataToSend->doubles.coord=(double *)(dataToSend->allTheData + memCounter);
+	memCounter += (dataToSend->numNodPnt * numSpatialDim)*sizeof(double);
 
-	dataToSend->doubles.force = dataToSend->doubles.allTheDoubles + memCounter;
-	memCounter += dataToSend->degOfFreedom;
+	dataToSend->doubles.materialProperties = (double *)(dataToSend->allTheData+ memCounter);
+	memCounter += (3*dataToSend->numMaterial)*sizeof(double);
 
-	dataToSend->doubles.materialProperties = dataToSend->doubles.allTheDoubles + memCounter;
-	memCounter += 3*dataToSend->numMaterial;
+	dataToSend->doubles.displacedNodesX = (double *)(dataToSend->allTheData + memCounter);
+	memCounter += (dataToSend->numNodPnt +1)*sizeof(double);
 
-	dataToSend->doubles.displacedNodesX = dataToSend->doubles.allTheDoubles + memCounter;
-	memCounter += dataToSend->numNodPnt +1;
-
-	dataToSend->doubles.displacedNodesY = dataToSend->doubles.allTheDoubles + memCounter;
-
-	memCounter = 0;
+	dataToSend->doubles.displacedNodesY = (double *)(dataToSend->allTheData + memCounter);
+	memCounter += (dataToSend->numNodPnt +1)*sizeof(double);
 
 /* Integers */
 	//printf("number of elements %d",dataToSend->numEl);
-	dataToSend->integers.connect = dataToSend->integers.allTheInts + memCounter;
-	memCounter += dataToSend->numEl*nodesPerElement;
+	dataToSend->integers.connect = (int *)(dataToSend->allTheData + memCounter);
+	memCounter += (dataToSend->numEl*nodesPerElement)*sizeof(int);
 
-	dataToSend->integers.el_matl = dataToSend->integers.allTheInts + memCounter;
-	memCounter += dataToSend->numEl;
-	
-	dataToSend->integers.nodesWithForce = dataToSend->integers.allTheInts + memCounter;
-	memCounter += dataToSend->numNodPnt+1;
+	dataToSend->integers.el_matl = (int *)(dataToSend->allTheData + memCounter);
+	memCounter += (dataToSend->numEl)*sizeof(int);
 
-	dataToSend->integers.forceGroup = dataToSend->integers.allTheInts + memCounter;
-	memCounter += dataToSend->numNodPnt;
+	dataToSend->integers.fixedNodesX = (int *)(dataToSend->allTheData + memCounter);
+	memCounter += (dataToSend->numNodPnt+1)*sizeof(int);
 
-	dataToSend->integers.fixedNodesX = dataToSend->integers.allTheInts + memCounter;
-	memCounter += dataToSend->numNodPnt+1;
+	dataToSend->integers.fixedNodesY = (int *)(dataToSend->allTheData + memCounter);
+	memCounter += (dataToSend->numNodPnt+1)*sizeof(int);
 
-	dataToSend->integers.fixedNodesY = dataToSend->integers.allTheInts + memCounter;
+	// Results to recieve:
+	dataToSend->finalFemDataToRecieve = dataToSend->allTheData + memCounter;
+	dataToSend->numBytesForFinalFemReciever = 0;
+
+	dataToSend->integers.forceGroup = (int *)(dataToSend->allTheData + memCounter);
+	dataToSend->numBytesForFinalFemReciever += (dataToSend->numNodPnt)*sizeof(int);
+	memCounter += (dataToSend->numNodPnt)*sizeof(int);
+
+	dataToSend->doubles.force = (double *)(dataToSend->allTheData + memCounter);
+	dataToSend->numBytesForFinalFemReciever += (dataToSend->degOfFreedom)*sizeof(double);
+	memCounter += (dataToSend->degOfFreedom)*sizeof(double);
+
+	dataToSend->integers.nodesWithForce = (int *)(dataToSend->allTheData+ memCounter);
+	dataToSend->numBytesForFinalFemReciever += (dataToSend->numNodPnt+1)*sizeof(int);
+	memCounter += (dataToSend->numNodPnt+1)*sizeof(int);
+
+	dataToSend->doubles.deformation = (double *)(dataToSend->allTheData+ memCounter);
+	dataToSend->numBytesForFinalFemReciever +=  (dataToSend->numNodPnt*2)*sizeof(double);
+	memCounter += (dataToSend->numNodPnt*2)*sizeof(double);
+
+	dataToSend->doubles.vonMieses = (double *)(dataToSend->allTheData + memCounter);
+	dataToSend->numBytesForFinalFemReciever += (dataToSend->numNodPnt)*sizeof(double);
+	memCounter += (dataToSend->numNodPnt)*sizeof(double);
+
 
 
 return 0;
@@ -422,6 +474,164 @@ int qdClientSender(FEMDATATOSEND *dataToSend, int sockfd){
 
 return 0;
 }
+
+int qdClientWriter( FEMDATATOSEND *dataToSave, const char name[]) {
+
+int 	i,j,node;
+double	fpointx, fpointy;
+FILE	*o3;
+int numel = dataToSave->numEl;
+int numnp = dataToSave->numNodPnt;
+int nmat = dataToSave->numMaterial;
+int plane_stress_flag = dataToSave->PlaneStressFlag;
+int gravity_flag = dataToSave->gravity_Flag;
+int npel = 4;//nodes per element
+int nsd = 2;//num spatial dimentions
+int ndof = 2;//nodal degree of freedom
+
+std::string newFileName(name);  // Convert to std::string
+std::string extension = ".dat";
+std::string suffix = "_result";
+
+    // Extract just the filename (after the last slash)
+    size_t lastSlash = newFileName.find_last_of("/\\");
+    std::string nameOnly = (lastSlash != std::string::npos)
+        ? newFileName.substr(lastSlash + 1)
+        : newFileName;
+
+    size_t pos = nameOnly.rfind(extension);
+    if (pos != std::string::npos) {
+        nameOnly.insert(pos, suffix);
+    } else {
+        std::cerr << "File does not have a .dat extension!" << std::endl;
+    }
+    nameOnly = "../results/" + nameOnly;
+
+o3 = fopen( nameOnly.c_str(), "w");
+
+fprintf(o3, "   numel numnp nmat plane_stress_flag gravity_flag");	
+fprintf(o3, " (This is for the quad mesh file: %s)\n", name);	
+fprintf(o3, "    %4d %4d %4d %4d %4d \n", 
+	numel, numnp, nmat, plane_stress_flag,gravity_flag);	
+fprintf(o3, "matl no., E modulus, Poisson's Ratio, density \n");
+
+for( i = 0; i < nmat; i++) {
+	fprintf(o3, "  %4d    %12.6e %12.6e %12.6e\n", i, *(dataToSave->doubles.materialProperties+3*i),
+	*(dataToSave->doubles.materialProperties+3*i+1),
+	*(dataToSave->doubles.materialProperties+3*i+2));	
+}
+
+fprintf(o3, "el no., connectivity, matl no \n");
+for( i = 0; i < numel; i++) {
+   fprintf(o3, "%6d ", i);	   
+   for( j = 0; j < npel; j++) {
+	fprintf(o3, "%6d ", *(dataToSave->integers.connect+npel*i+j));
+   }
+   fprintf(o3, "   %3d\n", *(dataToSave->integers.el_matl+i));
+} 
+
+fprintf(o3, "node no., coordinates \n");
+	for(i = 0; i < numnp; i++) {
+   fpointx = *(dataToSave->doubles.coord+nsd*i) + *(dataToSave->doubles.deformation+ndof*i);
+   fpointy = *(dataToSave->doubles.coord+nsd*i+1) + *(dataToSave->doubles.deformation+ndof*i+1);
+   fprintf( o3, "%4d %14.6f %14.6f\n", i, fpointx, fpointy);	
+}	
+
+fprintf(o3, "prescribed displacement x: node disp value \n");
+for(i = 0; i < numnp; i++) {
+	fprintf( o3, "%4d %14.6e\n", i, *(dataToSave->doubles.deformation+ndof*i));
+}
+fprintf( o3, " -10\n");	
+
+fprintf(o3, "prescribed displacement y: node disp value \n");
+for(i = 0; i < numnp; i++) {
+	fprintf( o3, "%4d %14.6e\n", i, *(dataToSave->doubles.deformation+ndof*i+1));
+}
+fprintf( o3, " -10\n");	
+
+
+fprintf( o3, "node with point load and load vector in x, y, with the force group\n");
+int *id = (int*)calloc(numnp,sizeof(int));
+memset(id,1,numnp*sizeof(int));
+for( i = 0; i < dataToSave->numForce; i++) {
+	node              = dataToSave->integers.nodesWithForce[i];
+	*(id+ndof*node)   = -1;
+	*(id+ndof*node+1) = -1;		
+}
+	
+for( i = 0; i < numnp; ++i ) {
+	   if( *(id+ndof*i) < 0 || *(id+ndof*i+1) < 0 )
+	   {
+		   fprintf( o3,"%4d",i);
+		   for( j = 0; j < ndof; ++j )
+		   {
+				   fprintf( o3," %16.4e ",*(dataToSave->doubles.force+ndof*i+j));
+		   }
+		   fprintf( o3, "%d\n",dataToSave->integers.forceGroup[i]);
+	   }
+	}
+fprintf( o3, " -10\n");
+free(id);
+
+/*
+fprintf( o3, "node no. with stress ");
+fprintf( o3, "and stress vector in xx,yy,xy \n");
+for( i = 0; i < numnp; ++i )
+{
+	fprintf( o3,"%4d  ",i);
+	fprintf( o3,"%14.6e ",stress_node[i].xx);
+	fprintf( o3,"%14.6e ",stress_node[i].yy);
+	fprintf( o3,"%14.6e ",stress_node[i].xy);
+	fprintf( o3, "\n");
+}
+	fprintf( o3, " -10 \n");
+	fprintf( o3, "node no. with stress ");
+	fprintf( o3, "and principal stress I,II \n");
+for( i = 0; i < numnp; ++i )
+{
+	fprintf( o3,"%4d  ",i);
+	fprintf( o3,"%14.6e ",stress_node[i].I);
+	fprintf( o3,"%14.6e ",stress_node[i].II);
+	fprintf( o3, "\n");
+}
+	fprintf( o3, " -10 \n");*/
+
+fprintf( o3, "node no. with vonMieses ");
+fprintf( o3, "and vonMieses magnitude \n");
+for(i=0;i<numnp;i++)
+{
+	fprintf( o3,"%4d  ",i);
+	fprintf( o3,"%14.6e \n ",dataToSave->doubles.vonMieses[i]);
+}
+fprintf( o3, " -10 \n");
+
+/*
+fprintf( o3, "node no. with strain ");
+fprintf( o3, "and strain vector in xx,yy,xy \n");
+for( i = 0; i < numnp; ++i )
+{
+	fprintf( o3,"%4d  ",i);
+	fprintf( o3,"%14.6e ",strain_node[i].xx);
+	fprintf( o3,"%14.6e ",strain_node[i].yy);
+	fprintf( o3,"%14.6e ",strain_node[i].xy);
+	fprintf( o3, "\n");
+}
+	fprintf( o3, " -10 \n");
+	fprintf( o3, "node no. with strain ");
+	fprintf( o3, "and principal strain I,II \n");
+for( i = 0; i < numnp; ++i )
+{
+	fprintf( o3,"%4d  ",i);
+	fprintf( o3,"%14.6e ",strain_node[i].I);
+	fprintf( o3,"%14.6e ",strain_node[i].II);
+	fprintf( o3, "\n");
+}
+	fprintf( o3, " -10 \n");*/
+	fclose(o3);
+
+return 0;
+}
+
 
 int freeDataToSend(FEMDATATOSEND *dataToSend){
 

@@ -23,10 +23,10 @@
 #define PORT "8085"
 #define IP "127.0.0.1"
 
-volatile sig_atomic_t gogo = 1;
+volatile sig_atomic_t shutDownSignal = 1;
 void handle_sigint(int sig) {
-    gogo = 0;
-    printf("\nSIGINT caught, shutting down gracefully... from femServer\n");
+    shutDownSignal = 0;
+    printf("\nSIGINT caught, shutting down gracefully... from clientController\n");
 }
 
 int main(int argc, char* argv[]){
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]){
 
 	int sockfd, check, portnum;
 	int16_t angle[4] = {0};
-    //bool gogo = true;
+    bool gogo = true;
 	portnum = atoi(PORT);
 	
     char ip[] = IP;
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]){
 		return 1;	
 	}
 
-    //send RBD data, includir rotational axis
+    //send RBD data, including rotational axis
     sleep(2);
     SendNChar(sockfd,RBDdataToSend.data,RBDdataToSend.numBytes);
 
@@ -194,9 +194,9 @@ int main(int argc, char* argv[]){
         printf("Sending Mesh %d\n",i);fflush(stdout); 
         //printElements(&initialDataToSend[i], i);
 
-        int numBytes= initialDataToSend[i].sizeOfMemDoubles*sizeof(double) + initialDataToSend[i].sizeOfMemIntegers*sizeof(int);
-        SendNChar(sockfd,initialDataToSend[i].allTheData,numBytes);
-        sleep(10);
+        SendNChar(sockfd,initialDataToSend[i].allTheData,initialDataToSend[i].numBytesToSend);
+        sleep(1);
+        
 
     }
 
@@ -209,10 +209,11 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
     device = "/dev/input/js0";
+    *gogoSignal = 1;
+    int intToRecieve = 0;
+    while(gogo && shutDownSignal){
 
-    while(gogo){
-
-        *gogoSignal = 1;
+        sleep(1);
         printf("Attempting to connect to controller...\n");
         js = open(device, O_RDONLY);
         if (js == -1){
@@ -242,6 +243,12 @@ int main(int argc, char* argv[]){
                       //Print values to screen for control
                     printf("Radius was %f, theta %f and phi %f\n",rates[0],rates[1],rates[2]);
                     printf("gogo was %d, moveCrane %d \n\n",*gogoSignal,*moveCraneSignal);
+                    ReceiveInt32(sockfd,&intToRecieve);
+                    if(!intToRecieve){
+                        gogo = false;
+                        printf("Recieved gogo = 0, clientController shutting down\n");
+                    }
+                    fflush(stdout);
                    
                     break;
 
@@ -276,22 +283,53 @@ int main(int argc, char* argv[]){
                     if(check){
                         printf("Error sending angle\n");
                     }
-                break;
+                    ReceiveInt32(sockfd,&intToRecieve);
+                    if(!intToRecieve){
+                        gogo = false;
+                        printf("Recieved gogo = 0, clientController shutting down\n");
+                    }
+                    fflush(stdout);
+                    break;
                 default:
                     /* Ignore init events. */
                     break;
             }
-            fflush(stdout);
         }
-        sleep(1);
+        
     }//while(gogo)
 
     //Send final controller values
     *gogoSignal = 0;
     check = SendNUnsignedChar(sockfd,dataToSend,numCharsToSend);
     printf("Shutdown sent\n");
-    printf("Radius was %f, theta %f and phi %f\n",rates[0],rates[1],rates[2]);
-    printf("gogo was %d, moveCrane %d \n\n",*gogoSignal,*moveCraneSignal);
+    //If closed with ctrl-c , skip the receivers.
+ if(shutDownSignal){  
+    ReceiveInt32(sockfd,&intToRecieve);
+
+    ReceiveNChars(sockfd,RBDdataToSend.data,RBDdataToSend.numBytes);
+    /*Recieve final results. deformation, vonMieses, Force, force group*/
+    for(int i=0;i<numFEMfiles;i++){
+        ReceiveNChars(sockfd,initialDataToSend[i].finalFemDataToRecieve,initialDataToSend[i].numBytesForFinalFemReciever);
+    }
+}else{
+    printf("Shuting down after SIGINT signal\n");
+}
+    printf("Saving final RBD results\n");
+    fflush(stdout); 
+  
+    
+
+    /*Save results*/
+    saveRBDdataToFile(&RBDdataToSend,selectedFile.c_str(),numFEMfiles);
+    printf("Saving final FEM\n");
+    fflush(stdout); 
+    for(int i=0; i<numFEMfiles;i++){
+        qdClientWriter( &initialDataToSend[i], filesFEM[i].filename.c_str()); 
+    }
+
+
+
+
     for(int i=0; i<numFEMfiles;i++){
         freeDataToSend(&initialDataToSend[i]);
     }

@@ -2,9 +2,6 @@
 #include <cstdio>
 
 int calcFemNumBytesFromClient(int header[5]){
-
-	printf("numE %d, nNode %d, numMat %d", header[0],header[1],header[2]);
-
     
     int numSpatialDim =2;
     int nodesPerElement = 4;
